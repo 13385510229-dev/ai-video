@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/auth';
 import { createOrder, verifyOrder } from '../api';
 import type { Package } from '../types';
 
@@ -9,6 +11,8 @@ const packages: Package[] = [
 ];
 
 const Recharge = () => {
+  const navigate = useNavigate();
+  const { user, setUser } = useAuthStore();
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [orderNo, setOrderNo] = useState('');
@@ -48,9 +52,10 @@ const Recharge = () => {
       const res = await verifyOrder(orderNo);
       if (res.data.success && res.data.order?.status === 'paid') {
         setSuccess(true);
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        // 更新用户余额
+        if (user && selectedPackage) {
+          setUser({ ...user, balance: user.balance + selectedPackage.credits });
+        }
       } else {
         setError('尚未收到支付，请稍后再试');
       }
@@ -99,8 +104,27 @@ const Recharge = () => {
           </p>
 
           {success ? (
-            <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 mb-6">
-              ✅ 支付成功！正在刷新...
+            <div className="mb-6">
+              <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 mb-4">
+                <div className="text-xl font-bold mb-2">🎉 支付成功！</div>
+                <div className="text-sm">已充值 {selectedPackage?.credits} 次，当前余额：{user?.balance || 0} 次</div>
+              </div>
+              <button
+                onClick={() => navigate('/')}
+                className="btn btn-primary w-full mb-3"
+              >
+                开始生成视频
+              </button>
+              <button
+                onClick={() => {
+                  setSuccess(false);
+                  setShowPayment(false);
+                  setSelectedPackage(null);
+                }}
+                className="text-sm text-gray-400 hover:text-white transition-colors w-full text-center"
+              >
+                继续充值
+              </button>
             </div>
           ) : (
             <>
