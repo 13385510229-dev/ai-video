@@ -1,8 +1,31 @@
+import { useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { Link } from 'react-router-dom';
+import { exportUserData } from '../api';
 
 const Profile = () => {
   const { user, logout } = useAuthStore();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      const res = await exportUserData();
+      const blob = res.data;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `user-data-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('导出数据失败:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 animate-fade-in">
@@ -57,6 +80,14 @@ const Profile = () => {
             <div className="text-2xl mb-1">💎</div>
             <span className="text-sm">充值次数</span>
           </Link>
+          <button
+            onClick={handleExportData}
+            disabled={exporting}
+            className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
+          >
+            <div className="text-2xl mb-1">📥</div>
+            <span className="text-sm">{exporting ? '导出中...' : '导出数据'}</span>
+          </button>
           <button
             onClick={logout}
             className="p-4 bg-gray-800/50 rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-colors text-center"

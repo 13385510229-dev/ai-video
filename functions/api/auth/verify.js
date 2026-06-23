@@ -16,7 +16,7 @@ export async function onRequestPost(context) {
     }
 
     // 验证验证码
-    const codeResult = verifyCode(email, code);
+    const codeResult = await verifyCode(email, code, env);
     if (!codeResult.valid) {
       return errorResponse(codeResult.error || '验证码错误');
     }

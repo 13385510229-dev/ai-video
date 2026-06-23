@@ -1,9 +1,19 @@
-import { jsonResponse, errorResponse, handleOptions } from '../_lib/auth.js';
+import { jsonResponse, errorResponse, handleOptions, rateLimit } from '../_lib/auth.js';
 import { sendVerificationCode } from '../_lib/emailService.js';
 
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
+
+    // 速率限制：每分钟最多发送 5 次验证码
+    const rateLimitResult = await rateLimit(request, env, {
+      max: 5,
+      windowSeconds: 60,
+      prefix: 'ratelimit:login',
+    });
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response;
+    }
     const body = await request.json();
     const { email } = body;
 

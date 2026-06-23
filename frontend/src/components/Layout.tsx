@@ -81,6 +81,10 @@ const Layout = () => {
       <footer className="border-t border-gray-800 py-8">
         <div className="max-w-7xl mx-auto px-6 text-center text-gray-500 text-sm">
           © 2024 AI Video Generator. All rights reserved.
+          <div className="mt-2 space-x-6">
+            <a href="/terms" className="hover:text-gray-300 transition-colors">服务条款</a>
+            <a href="/privacy" className="hover:text-gray-300 transition-colors">隐私政策</a>
+          </div>
         </div>
       </footer>
     </div>

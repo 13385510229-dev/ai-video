@@ -196,3 +196,42 @@ export function handleOptions() {
     headers: corsHeaders,
   });
 }
+
+// 速率限制中间件
+export async function rateLimit(request, env, options = {}) {
+  const {
+    max = 10,
+    windowSeconds = 60,
+    prefix = 'ratelimit',
+  } = options;
+
+  const clientIp = request.headers.get('CF-Connecting-IP') || 
+                   request.headers.get('X-Forwarded-For') || 
+                   'unknown';
+  const key = `${prefix}:${clientIp}`;
+
+  if (!env?.KV_CACHE) {
+    return { allowed: true };
+  }
+
+  try {
+    const current = await env.KV_CACHE.get(key);
+    const count = current ? parseInt(current, 10) : 0;
+
+    if (count >= max) {
+      return {
+        allowed: false,
+        response: errorResponse('请求过于频繁，请稍后重试', 429),
+      };
+    }
+
+    await env.KV_CACHE.put(key, String(count + 1), {
+      expirationTtl: windowSeconds,
+    });
+
+    return { allowed: true };
+  } catch (err) {
+    console.warn('速率限制检查失败:', err);
+    return { allowed: true };
+  }
+}

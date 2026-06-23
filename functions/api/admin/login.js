@@ -1,8 +1,19 @@
-import { jsonResponse, errorResponse, handleOptions, signJWT } from '../_lib/auth.js';
+import { jsonResponse, errorResponse, handleOptions, signJWT, rateLimit } from '../_lib/auth.js';
 
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
+
+    // 速率限制：每分钟最多尝试 5 次
+    const rateLimitResult = await rateLimit(request, env, {
+      max: 5,
+      windowSeconds: 60,
+      prefix: 'ratelimit:admin',
+    });
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response;
+    }
+
     const body = await request.json();
     const { password } = body;
 

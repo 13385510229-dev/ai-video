@@ -1,35 +1,38 @@
 // 邮件服务 - 支持 Resend API 和模拟模式
 // Cloudflare Workers 不支持 SMTP，所以用 HTTP API 方式
 
-// 模拟模式下的验证码存储（内存存储，多实例可能有问题，用户量小没问题）
+// 降级用的内存存储（当 KV 不可用时）
 const verificationCodes = new Map();
 
 // 发送验证码
 export async function sendVerificationCode(email, env) {
   const code = generateCode();
-  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 分钟有效
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+  const data = JSON.stringify({ code, expiresAt });
 
-  // 保存验证码
-  verificationCodes.set(email, { code, expiresAt });
-
-  // 清理过期验证码
-  for (const [key, value] of verificationCodes) {
-    if (value.expiresAt < Date.now()) {
-      verificationCodes.delete(key);
+  // 优先使用 Cloudflare KV
+  if (env?.KV_CACHE) {
+    try {
+      await env.KV_CACHE.put(`verify:${email}`, data, {
+        expirationTtl: 600,
+      });
+    } catch (err) {
+      console.warn('KV 存储失败，降级到内存存储:', err);
+      verificationCodes.set(email, { code, expiresAt });
     }
+  } else {
+    verificationCodes.set(email, { code, expiresAt });
   }
 
   const resendApiKey = env.RESEND_API_KEY;
   const fromEmail = env.SMTP_FROM_EMAIL || 'noreply@example.com';
   const fromName = env.SMTP_FROM_NAME || 'AI视频生成平台';
 
-  // 如果没有配置 Resend API Key，使用模拟模式
   if (!resendApiKey) {
     console.log(`[模拟邮件] 验证码: ${code} (发送给: ${email})`);
     return { success: true, mode: 'simulation' };
   }
 
-  // 使用 Resend API 发送
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -61,7 +64,6 @@ export async function sendVerificationCode(email, env) {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       console.error('Resend API error:', err);
-      // 发送失败时降级到模拟模式
       console.log(`[模拟邮件] 验证码: ${code} (发送给: ${email})`);
       return { success: true, mode: 'simulation-fallback' };
     }
@@ -69,22 +71,42 @@ export async function sendVerificationCode(email, env) {
     return { success: true, mode: 'resend' };
   } catch (error) {
     console.error('Send email error:', error);
-    // 出错时降级到模拟模式
     console.log(`[模拟邮件] 验证码: ${code} (发送给: ${email})`);
     return { success: true, mode: 'simulation-fallback' };
   }
 }
 
 // 验证验证码
-export function verifyCode(email, code) {
-  const record = verificationCodes.get(email);
+export async function verifyCode(email, code, env) {
+  let record = null;
+
+  // 优先从 KV 读取
+  if (env?.KV_CACHE) {
+    try {
+      const data = await env.KV_CACHE.get(`verify:${email}`, 'json');
+      if (data) {
+        record = data;
+        // 验证后删除
+        await env.KV_CACHE.delete(`verify:${email}`);
+      }
+    } catch (err) {
+      console.warn('KV 读取失败，尝试内存存储:', err);
+    }
+  }
+
+  // KV 没有就从内存读取
+  if (!record) {
+    record = verificationCodes.get(email);
+    if (record) {
+      verificationCodes.delete(email);
+    }
+  }
 
   if (!record) {
     return { valid: false, error: '验证码不存在或已过期' };
   }
 
   if (record.expiresAt < Date.now()) {
-    verificationCodes.delete(email);
     return { valid: false, error: '验证码已过期' };
   }
 
@@ -92,8 +114,6 @@ export function verifyCode(email, code) {
     return { valid: false, error: '验证码错误' };
   }
 
-  // 验证成功后删除验证码（一次性使用）
-  verificationCodes.delete(email);
   return { valid: true };
 }
 

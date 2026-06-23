@@ -16,6 +16,8 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminUsers from './pages/admin/AdminUsers';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 // 路由守卫
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -52,6 +54,8 @@ function App() {
         <Route path="image-history" element={<ProtectedRoute><ImageHistory /></ProtectedRoute>} />
         <Route path="recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
         <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="terms" element={<TermsOfService />} />
+        <Route path="privacy" element={<PrivacyPolicy />} />
       </Route>
 
       {/* 管理后台路由 */}

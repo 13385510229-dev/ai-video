@@ -183,4 +183,11 @@ export const addCredits = (userId: number, credits: number) => {
   return adminApi.post('/add-credits', { userId, credits });
 };
 
+// 导出用户数据
+export const exportUserData = () => {
+  return api.post('/users/export', {}, {
+    responseType: 'blob',
+  });
+};
+
 export default api;
