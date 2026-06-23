@@ -76,12 +76,21 @@ const Recharge = () => {
             ¥{selectedPackage?.amount}
           </div>
 
-          {/* 收款码占位 */}
-          <div className="w-48 h-48 mx-auto bg-white rounded-lg flex items-center justify-center mb-6">
-            <div className="text-gray-400 text-sm text-center px-4">
-              收款码图片
+          {/* 收款码 */}
+          <div className="w-48 h-48 mx-auto bg-white rounded-lg flex items-center justify-center mb-6 overflow-hidden">
+            <img 
+              src="/payment-qr.jpg" 
+              alt="支付宝收款码" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="hidden text-gray-400 text-sm text-center px-4">
+              收款码加载失败
               <br />
-              <span className="text-xs">（配置 PAYMENT_QR_CODE 后显示）</span>
+              <span className="text-xs">请联系管理员</span>
             </div>
           </div>
 
