@@ -1,13 +1,20 @@
 // JWT 工具 - 纯 Web Crypto API 实现，无外部依赖
 // 使用 HS256 算法
 
-// Base64URL 编码
-function base64UrlEncode(str) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
+// Base64URL 编码（支持字符串和 ArrayBuffer）
+function base64UrlEncode(data) {
   let binary = '';
-  for (let i = 0; i < data.byteLength; i++) {
-    binary += String.fromCharCode(data[i]);
+  if (typeof data === 'string') {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(data);
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+  } else if (data instanceof ArrayBuffer) {
+    const bytes = new Uint8Array(data);
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
   }
   const base64 = btoa(binary);
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -47,7 +54,7 @@ async function hmacSign(message, secret) {
   const encoder = new TextEncoder();
   const data = encoder.encode(message);
   const signature = await crypto.subtle.sign('HMAC', key, data);
-  return base64UrlEncode(String.fromCharCode(...new Uint8Array(signature)));
+  return base64UrlEncode(signature);
 }
 
 // HMAC-SHA256 验证
@@ -55,8 +62,22 @@ async function hmacVerify(message, signature, secret) {
   const key = await importKey(secret);
   const encoder = new TextEncoder();
   const data = encoder.encode(message);
-  const sigBytes = new Uint8Array(atob(signature.replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => c.charCodeAt(0)));
+  const sigBytes = base64UrlDecodeToBuffer(signature);
   return crypto.subtle.verify('HMAC', key, sigBytes, data);
+}
+
+// Base64URL 解码（返回 ArrayBuffer）
+function base64UrlDecodeToBuffer(str) {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 // 生成 JWT
