@@ -3,16 +3,19 @@ import { createSupabaseClient } from '../_lib/supabase.js';
 import { getVideoTaskStatus } from '../_lib/videoService.js';
 
 export async function onRequestGet(context) {
-  try {
-    const { request, env } = context;
+  const { request, env } = context;
 
-    // 认证
+  if (request.method === 'OPTIONS') {
+    return handleOptions();
+  }
+
+  try {
     const authResult = await requireAuth(request, env);
     if (authResult.error) {
       return errorResponse(authResult.error, 401);
     }
 
-    const userId = authResult.user.sub;
+    const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
 
     // 初始化 Supabase
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);

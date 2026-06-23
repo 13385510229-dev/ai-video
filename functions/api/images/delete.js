@@ -15,7 +15,7 @@ export async function onRequestDelete(context) {
       return errorResponse(authResult.error, 401);
     }
 
-    const userId = authResult.user.sub;
+    const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
     const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = env;
 
     const url = new URL(request.url);

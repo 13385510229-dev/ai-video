@@ -2,16 +2,19 @@ import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib
 import { createSupabaseClient } from '../_lib/supabase.js';
 
 export async function onRequestGet(context) {
-  try {
-    const { request, env } = context;
+  const { request, env } = context;
 
-    // 认证
+  if (request.method === 'OPTIONS') {
+    return handleOptions();
+  }
+
+  try {
     const authResult = await requireAuth(request, env);
     if (authResult.error) {
       return errorResponse(authResult.error, 401);
     }
 
-    const userId = authResult.user.sub;
+    const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
 
     // 获取视频 ID
     const url = new URL(request.url);

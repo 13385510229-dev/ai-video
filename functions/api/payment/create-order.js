@@ -28,7 +28,7 @@ export async function onRequestPost(context) {
       return errorResponse(authResult.error, 401);
     }
 
-    const userId = authResult.user.sub;
+    const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
     const body = await request.json();
     const { packageId } = body;
 
