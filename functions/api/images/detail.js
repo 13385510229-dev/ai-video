@@ -3,23 +3,22 @@ import { createSupabaseClient } from '../_lib/supabase.js';
 import { requireAuth, jsonResponse, errorResponse, handleOptions } from '../_lib/auth.js';
 
 export async function onRequestGet(context) {
-  // 处理 OPTIONS 请求
-  if (context.request.method === 'OPTIONS') {
+  const { request, env } = context;
+
+  if (request.method === 'OPTIONS') {
     return handleOptions();
   }
 
   try {
-    // 验证用户身份
-    const authResult = await requireAuth(context);
-    if (!authResult.success) {
-      return errorResponse(authResult.message, 401);
+    const authResult = await requireAuth(request, env);
+    if (authResult.error) {
+      return errorResponse(authResult.error, 401);
     }
 
-    const userId = authResult.userId;
-    const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = context.env;
+    const userId = authResult.user.sub;
+    const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = env;
 
-    // 获取查询参数
-    const url = new URL(context.request.url);
+    const url = new URL(request.url);
     const id = url.searchParams.get('id');
 
     if (!id) {

@@ -4,23 +4,22 @@ import { requireAuth, jsonResponse, errorResponse, handleOptions } from '../_lib
 import { generateImage } from '../_lib/imageService.js';
 
 export async function onRequestPost(context) {
-  // 处理 OPTIONS 请求
-  if (context.request.method === 'OPTIONS') {
+  const { request, env } = context;
+
+  if (request.method === 'OPTIONS') {
     return handleOptions();
   }
 
   try {
-    // 验证用户身份
-    const authResult = await requireAuth(context);
-    if (!authResult.success) {
-      return errorResponse(authResult.message, 401);
+    const authResult = await requireAuth(request, env);
+    if (authResult.error) {
+      return errorResponse(authResult.error, 401);
     }
 
-    const userId = authResult.userId;
-    const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AGNES_API_KEY } = context.env;
+    const userId = authResult.user.sub;
+    const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AGNES_API_KEY } = env;
 
-    // 解析请求体
-    const body = await context.request.json();
+    const body = await request.json();
     const { prompt, negativePrompt, style, size } = body;
 
     if (!prompt || !prompt.trim()) {
