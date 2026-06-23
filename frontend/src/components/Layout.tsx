@@ -26,7 +26,7 @@ const Layout = () => {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="text-2xl font-bold tracking-tight">
-            AI<span className="text-gray-400">Video</span>
+            AI<span className="text-gray-400">-HTY</span>
           </Link>
 
           {isLoggedIn && (
@@ -80,7 +80,7 @@ const Layout = () => {
       {/* 页脚 */}
       <footer className="border-t border-gray-800 py-8">
         <div className="max-w-7xl mx-auto px-6 text-center text-gray-500 text-sm">
-          © 2024 AI Video Generator. All rights reserved.
+          © 2026 AI-HTY. All rights reserved.
           <div className="mt-2 space-x-6">
             <a href="/terms" className="hover:text-gray-300 transition-colors">服务条款</a>
             <a href="/privacy" className="hover:text-gray-300 transition-colors">隐私政策</a>

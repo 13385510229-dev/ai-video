@@ -80,7 +80,7 @@ const Login = () => {
       <div className="w-full max-w-md animate-scale-in">
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold mb-2">
-            AI<span className="text-gray-400">Video</span>
+            AI<span className="text-gray-400">-HTY</span>
           </h1>
           <p className="text-gray-400">登录以继续使用</p>
         </div>
