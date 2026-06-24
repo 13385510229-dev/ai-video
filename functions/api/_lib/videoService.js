@@ -105,15 +105,21 @@ export async function createVideoTask(params, env) {
   // 根据模式设置不同参数
   if (mode === 'i2v' && image) {
     // 图生视频模式
+    requestBody.mode = 'i2v';
     requestBody.image = image;
-  } else if ((mode === 'multi-image' || mode === 'keyframes') && images && images.length > 0) {
-    // 多图/关键帧模式
+  } else if (mode === 'multi-image' && images && images.length > 0) {
+    // 多图视频模式
+    requestBody.mode = 'i2v';
     requestBody.extra_body = {
       image: images,
     };
-    if (mode === 'keyframes') {
-      requestBody.extra_body.mode = 'keyframes';
-    }
+  } else if (mode === 'keyframes' && images && images.length > 0) {
+    // 关键帧动画模式
+    requestBody.mode = 'i2v';
+    requestBody.extra_body = {
+      image: images,
+      mode: 'keyframes',
+    };
   } else {
     // 文生视频模式（默认）
     requestBody.mode = 'ti2vid';

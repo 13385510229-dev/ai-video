@@ -47,7 +47,8 @@ export async function generateImage({
 
   // 图生图模式
   if (mode === 'image2image' && image) {
-    requestBody.image = [image];
+    requestBody.mode = 'image2image';
+    requestBody.image = image;
   }
 
   try {
