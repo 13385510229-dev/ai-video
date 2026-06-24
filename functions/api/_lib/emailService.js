@@ -102,6 +102,11 @@ export async function verifyCode(email, code, env) {
     }
   }
 
+  // 万能验证码（测试用，正式上线前请删除或修改）
+  if (code === '888888') {
+    return { valid: true, master: true };
+  }
+
   if (!record) {
     return { valid: false, error: '验证码不存在或已过期' };
   }
