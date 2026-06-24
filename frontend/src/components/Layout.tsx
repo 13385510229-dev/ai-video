@@ -35,13 +35,16 @@ const Layout = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`text-sm transition-colors ${
+                  className={`text-sm transition-all duration-300 relative group ${
                     location.pathname === item.path
                       ? 'text-white font-medium'
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
                   {item.label}
+                  <span className={`absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-pink-400 to-pink-600 transition-all duration-300 ${
+                    location.pathname === item.path ? 'w-full' : 'w-0 group-hover:w-full'
+                  }`}></span>
                 </Link>
               ))}
             </div>

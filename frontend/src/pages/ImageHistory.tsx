@@ -76,8 +76,8 @@ export default function ImageHistory() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+      <div className="flex items-center justify-center h-64 animate-fade-in">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div>
       </div>
     );
   }
@@ -97,16 +97,16 @@ export default function ImageHistory() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto animate-fade-in">
       {/* 标题 */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 animate-slide-up">
         <div>
           <h1 className="text-3xl font-bold mb-2">图片历史</h1>
           <p className="text-gray-500">共 {images.length} 张图片</p>
         </div>
         <Link
           to="/image-generate"
-          className="px-6 py-2 bg-white text-black font-medium rounded-lg hover:bg-gray-200 transition-colors"
+          className="btn btn-primary"
         >
           + 生成新图片
         </Link>
@@ -114,23 +114,24 @@ export default function ImageHistory() {
 
       {/* 图片列表 */}
       {images.length === 0 ? (
-        <div className="text-center py-20 bg-[#121212] rounded-2xl border border-gray-800">
+        <div className="text-center py-20 bg-[#121212] rounded-2xl border border-gray-800 animate-slide-up" style={{ animationDelay: '0.1s' }}>
           <div className="text-6xl mb-4">🖼️</div>
           <h3 className="text-xl font-medium mb-2">还没有图片</h3>
           <p className="text-gray-500 mb-6">开始生成你的第一张 AI 图片吧</p>
           <Link
             to="/image-generate"
-            className="inline-block px-8 py-3 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+            className="btn btn-primary"
           >
             立即生成
           </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {images.map((image) => (
+          {images.map((image, index) => (
             <div
               key={image.id}
-              className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 hover:border-gray-700 transition-colors group"
+              className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 hover:border-pink-500/50 hover:shadow-lg hover:shadow-pink-500/10 transition-all duration-300 group animate-slide-up"
+              style={{ animationDelay: `${index * 0.05}s` }}
             >
               {/* 图片预览 */}
               <div className="relative aspect-video bg-black overflow-hidden">
@@ -150,7 +151,7 @@ export default function ImageHistory() {
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white mx-auto mb-3"></div>
+                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-pink-500 mx-auto mb-3"></div>
                       <p className="text-gray-400 text-sm">生成中...</p>
                     </div>
                   </div>

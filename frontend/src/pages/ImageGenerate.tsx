@@ -113,10 +113,10 @@ export default function ImageGenerate() {
               <button
                 key={m.value}
                 onClick={() => setMode(m.value)}
-                className={`p-4 rounded-lg border text-left transition-all ${
+                className={`p-4 rounded-lg border text-left transition-all duration-300 ${
                   mode === m.value
-                    ? 'border-white bg-white/10'
-                    : 'border-gray-700 hover:border-gray-600'
+                    ? 'border-pink-400 bg-pink-500/10 shadow-lg shadow-pink-500/20'
+                    : 'border-gray-700 hover:border-gray-500 hover:bg-gray-800/50'
                 }`}
               >
                 <div className="font-medium">{m.label}</div>
