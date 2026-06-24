@@ -92,25 +92,36 @@ export async function onRequestPost(context) {
       // 即使扣除失败也继续，后面可以补扣
     }
 
-    // 保存视频记录
-    const { data: video, error: insertError } = await supabase
-      .from('videos')
-      .insert({
+    // 保存视频记录（直接用 fetch，确保 100% 生效）
+    const insertRes = await fetch(`${env.SUPABASE_URL}/rest/v1/videos`, {
+      method: 'POST',
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify({
         user_id: userId,
-        prompt,
-        negative_prompt: negativePrompt,
-        style,
+        prompt: prompt.trim(),
+        negative_prompt: negativePrompt?.trim() || null,
+        style: style || null,
         duration,
         aspect_ratio: aspectRatio,
         task_id: taskResult.task_id,
         status: 'processing',
         cost,
-      });
+      }),
+    });
 
-    if (insertError) {
-      console.error('保存视频记录失败:', insertError);
-      return errorResponse('创建失败，请稍后重试', 500);
+    if (!insertRes.ok) {
+      const err = await insertRes.json().catch(() => ({}));
+      console.error('保存视频记录失败:', err);
+      return errorResponse(`创建失败: ${err.message || JSON.stringify(err)}`);
     }
+
+    const insertData = await insertRes.json();
+    const video = Array.isArray(insertData) ? insertData[0] : insertData;
 
     return jsonResponse({
       success: true,
