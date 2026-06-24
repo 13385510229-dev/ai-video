@@ -118,7 +118,7 @@ export default function ImageHistory() {
       {/* 标题 */}
       <div className="flex items-center justify-between mb-8 animate-slide-up">
         <div>
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-pink-400 to-purple-500 bg-clip-text text-transparent">图片历史</h1>
+          <h1 className="text-3xl font-bold mb-2 text-white">图片历史</h1>
           <p className="text-gray-500">共 {images.length} 张图片</p>
         </div>
         <Link
@@ -132,7 +132,6 @@ export default function ImageHistory() {
       {/* 图片列表 */}
       {images.length === 0 ? (
         <div className="text-center py-20 bg-[#121212] rounded-2xl border border-gray-800 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-          <div className="text-6xl mb-4">🖼️</div>
           <h3 className="text-xl font-medium mb-2">还没有图片</h3>
           <p className="text-gray-500 mb-6">开始生成你的第一张 AI 图片吧</p>
           <Link
@@ -147,7 +146,7 @@ export default function ImageHistory() {
           {images.map((image, index) => (
             <div
               key={image.id}
-              className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 hover:border-pink-500/50 hover:shadow-lg hover:shadow-pink-500/10 transition-all duration-300 group animate-slide-up card-shine"
+              className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 hover:border-white/30 hover:shadow-lg hover:shadow-white/5 transition-all duration-300 group animate-slide-up card-shine"
               style={{ animationDelay: `${index * 0.05}s` }}
             >
               {/* 图片预览 */}
@@ -161,14 +160,13 @@ export default function ImageHistory() {
                 ) : image.status === 'failed' ? (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="text-center">
-                      <div className="text-4xl mb-2">❌</div>
                       <p className="text-red-400 text-sm">生成失败</p>
                     </div>
                   </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-pink-500 mx-auto mb-3"></div>
+                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white/50 mx-auto mb-3"></div>
                       <p className="text-gray-400 text-sm">生成中...</p>
                     </div>
                   </div>

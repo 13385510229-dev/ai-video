@@ -11,9 +11,19 @@ interface Particle {
   originalZ: number;
 }
 
+interface BgParticle {
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+  speedX: number;
+  speedY: number;
+}
+
 const ParticleBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
+  const bgParticlesRef = useRef<BgParticle[]>([]);
   const mouseRef = useRef({ x: 0, y: 0, active: false });
   const animationRef = useRef<number>(0);
   const timeRef = useRef(0);
@@ -33,29 +43,25 @@ const ParticleBackground = () => {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // 生成编织形状的粒子（参数化3D曲面）
+    // ========== 中心编织粒子 ==========
     const particles: Particle[] = [];
     
-    // 参数：生成一个扭曲的圆环面，类似编织效果
     const R = 180; // 主半径
     const r = 80;  // 管半径
     const twists = 3; // 扭曲次数
-    const particleCount = 2500; // 粒子数量，非常密集
+    const particleCount = 2500; // 粒子数量
 
     for (let i = 0; i < particleCount; i++) {
-      // 随机参数
       const u = Math.random() * Math.PI * 2;
       const v = Math.random() * Math.PI * 2;
       
-      // 扭曲的圆环面参数方程
       const twistAngle = u * twists;
       const radius = R + r * Math.cos(v + twistAngle * 0.5);
       
       const x = radius * Math.cos(u);
-      const y = radius * Math.sin(u) * 0.6; // 稍微压扁一点
+      const y = radius * Math.sin(u) * 0.6;
       const z = r * Math.sin(v + twistAngle * 0.5) + Math.sin(u * 2) * 20;
 
-      // 再加一些随机偏移，让它更自然
       const noise = (Math.random() - 0.5) * 3;
 
       particles.push({
@@ -70,7 +76,7 @@ const ParticleBackground = () => {
       });
     }
 
-    // 再加一些外层散点，增加层次感
+    // 外层散点
     for (let i = 0; i < 300; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.random() * Math.PI;
@@ -93,6 +99,23 @@ const ParticleBackground = () => {
     }
 
     particlesRef.current = particles;
+
+    // ========== 全屏背景粒子（四边也有） ==========
+    const bgParticles: BgParticle[] = [];
+    const bgParticleCount = 200; // 全屏200个散点
+
+    for (let i = 0; i < bgParticleCount; i++) {
+      bgParticles.push({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        size: Math.random() * 1.5 + 0.5,
+        opacity: Math.random() * 0.3 + 0.1,
+        speedX: (Math.random() - 0.5) * 0.3,
+        speedY: (Math.random() - 0.5) * 0.3,
+      });
+    }
+
+    bgParticlesRef.current = bgParticles;
 
     // 鼠标移动
     const handleMouseMove = (e: MouseEvent) => {
@@ -118,11 +141,57 @@ const ParticleBackground = () => {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // ========== 绘制全屏背景粒子 ==========
+      for (const p of bgParticlesRef.current) {
+        // 移动
+        p.x += p.speedX;
+        p.y += p.speedY;
+
+        // 边界循环
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+
+        // 鼠标靠近时变亮
+        let brightness = p.opacity;
+        if (mouseRef.current.active) {
+          const dx = mouseRef.current.x - p.x;
+          const dy = mouseRef.current.y - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 150) {
+            brightness = p.opacity + (1 - dist / 150) * 0.5;
+          }
+        }
+
+        // 绘制粒子
+        const gradient = ctx.createRadialGradient(
+          p.x,
+          p.y,
+          0,
+          p.x,
+          p.y,
+          p.size * 3
+        );
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${brightness})`);
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, brightness + 0.2)})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // ========== 绘制中心编织粒子 ==========
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
       const fov = 500;
 
-      // 鼠标影响旋转
       let rotX = 0.3;
       let rotY = timeRef.current;
       
@@ -138,7 +207,6 @@ const ParticleBackground = () => {
       const cosY = Math.cos(rotY);
       const sinY = Math.sin(rotY);
 
-      // 存储投影后的粒子
       const projected: {
         x: number;
         y: number;
@@ -148,20 +216,16 @@ const ParticleBackground = () => {
       }[] = [];
 
       for (const particle of particlesRef.current) {
-        // 3D 旋转（先绕Y轴，再绕X轴）
         let x = particle.originalX;
         let y = particle.originalY;
         let z = particle.originalZ;
 
-        // 绕 Y 轴旋转
         const x1 = x * cosY - z * sinY;
         const z1 = x * sinY + z * cosY;
 
-        // 绕 X 轴旋转
         const y2 = y * cosX - z1 * sinX;
         const z2 = y * sinX + z1 * cosX;
 
-        // 透视投影
         const scale = fov / (fov + z2 + 300);
         const projX = centerX + x1 * scale;
         const projY = centerY + y2 * scale;
@@ -177,14 +241,11 @@ const ParticleBackground = () => {
         });
       }
 
-      // 按 z 排序，远的先画
       projected.sort((a, b) => a.z - b.z);
 
-      // 绘制粒子
       for (const p of projected) {
         if (p.opacity < 0.02) continue;
 
-        // 粒子发光
         const gradient = ctx.createRadialGradient(
           p.x,
           p.y,
@@ -202,7 +263,6 @@ const ParticleBackground = () => {
         ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
         ctx.fill();
 
-        // 粒子核心
         ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, p.opacity + 0.2)})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);

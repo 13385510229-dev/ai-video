@@ -103,7 +103,7 @@ const History = () => {
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 animate-fade-in">
       <div className="mb-8 animate-slide-up">
-        <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-pink-400 to-purple-500 bg-clip-text text-transparent">历史记录</h1>
+        <h1 className="text-3xl font-bold mb-2 text-white">历史记录</h1>
         <p className="text-gray-400">共 {videos.length} 个视频</p>
       </div>
 
@@ -115,7 +115,6 @@ const History = () => {
 
       {videos.length === 0 ? (
         <div className="card text-center py-16">
-          <div className="text-6xl mb-4">🎬</div>
           <p className="text-gray-400 mb-6">还没有生成过视频</p>
           <button
             onClick={() => window.location.href = '/'}
@@ -145,7 +144,6 @@ const History = () => {
                   <div className="w-full h-full flex flex-col items-center justify-center">
                     {video.status === 'failed' ? (
                       <>
-                        <div className="text-4xl mb-2">❌</div>
                         <p className="text-red-400 text-sm">生成失败</p>
                         {video.error_message && (
                           <p className="text-gray-500 text-xs mt-1 px-4 text-center">
