@@ -1,19 +1,12 @@
-// 生成图片接口
+import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
-import { requireAuth, jsonResponse, errorResponse, handleOptions } from '../_lib/auth.js';
 import { generateImage } from '../_lib/imageService.js';
 
-export async function onRequest(context) {
+export async function onRequestPost(context) {
   const { request, env } = context;
 
-  // 处理 OPTIONS 预检请求
   if (request.method === 'OPTIONS') {
     return handleOptions();
-  }
-
-  // 只允许 POST 方法
-  if (request.method !== 'POST') {
-    return errorResponse('方法不允许', 405);
   }
 
   try {
@@ -23,64 +16,47 @@ export async function onRequest(context) {
     }
 
     const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
-    const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AGNES_API_KEY } = env;
-
     const body = await request.json();
     const {
       prompt,
-      negativePrompt,
-      style,
-      size,
-      mode = 'text2image', // text2image: 文生图, image2image: 图生图
-      image = null, // 参考图 URL
+      negativePrompt = '',
+      style = 'realistic',
+      size = '1024x768',
+      mode = 'text2image',
+      image = null,
     } = body;
 
     if (!prompt || !prompt.trim()) {
-      return errorResponse('请输入图片描述');
+      return errorResponse('图片描述不能为空');
     }
 
-    const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // 初始化 Supabase
+    const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-    // 检查用户余额
-    const { data: user, error: userError } = await supabase
+    // 查询用户余额
+    const { data: users, error: userError } = await supabase
       .from('users')
       .select('balance')
-      .eq('id', userId)
-      .single();
+      .eq('id', userId);
 
-    if (userError || !user) {
-      return errorResponse(`用户不存在: ${userError?.message || ''}`, 404);
+    if (userError || !users?.[0]) {
+      return errorResponse('用户不存在', 404);
     }
 
+    const user = users[0];
     const cost = 1; // 每张图片消耗 1 次
 
     if (user.balance < cost) {
-      return errorResponse('次数不足，请先充值');
+      return errorResponse('余额不足，请充值', 400);
     }
 
-    // 扣除次数
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ balance: user.balance - cost })
-      .eq('id', userId);
-
-    if (updateError) {
-      return errorResponse(`扣除次数失败: ${updateError.message || JSON.stringify(updateError)}`);
-    }
-
-    // 生成唯一 ID（时间戳 + 随机数，避免自增主键冲突问题）
+    // 生成唯一 ID（时间戳 + 随机数，避免自增主键问题）
     const imageId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
-    // 先插入记录，状态为 processing（直接用 fetch，绕过客户端 bug）
-    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/images`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      },
-      body: JSON.stringify({
+    // 先保存记录
+    const { data: imageRecord, error: insertError } = await supabase
+      .from('images')
+      .insert({
         id: imageId,
         user_id: userId,
         prompt: prompt.trim(),
@@ -89,23 +65,23 @@ export async function onRequest(context) {
         size: size || '1024x768',
         status: 'processing',
         cost,
-      }),
-    });
+      });
 
-    if (!insertRes.ok) {
-      const err = await insertRes.json().catch(() => ({}));
-      // 回滚余额
-      await supabase
-        .from('users')
-        .update({ balance: user.balance })
-        .eq('id', userId);
-      return errorResponse(`创建记录失败: ${err.message || JSON.stringify(err)}`);
+    if (insertError) {
+      console.error('保存图片记录失败:', insertError);
+      return errorResponse('创建失败，请稍后重试', 500);
     }
 
-    const insertData = await insertRes.json();
-    const record = Array.isArray(insertData) ? insertData[0] : insertData;
-    // 确保 ID 正确（用我们自己生成的，更可靠）
-    const recordId = record?.id || imageId;
+    // 扣除余额
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ balance: user.balance - cost })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('扣除余额失败:', updateError);
+      // 即使扣除失败也继续，后面可以补扣
+    }
 
     // 同步生成图片
     try {
@@ -114,7 +90,7 @@ export async function onRequest(context) {
         negativePrompt: negativePrompt?.trim(),
         size: size || '1024x768',
         style: style,
-        apiKey: AGNES_API_KEY || '',
+        apiKey: env.AGNES_API_KEY || '',
         mode,
         image,
       });
@@ -127,17 +103,23 @@ export async function onRequest(context) {
             status: 'succeeded',
             image_url: result.imageUrl,
           })
-          .eq('id', recordId);
+          .eq('id', imageId);
 
         return jsonResponse({
           success: true,
           message: '生成成功',
           image: {
-            ...record,
-            id: recordId,
+            id: imageId,
+            user_id: userId,
+            prompt: prompt.trim(),
+            negative_prompt: negativePrompt?.trim() || null,
+            style: style || null,
+            size: size || '1024x768',
             status: 'succeeded',
             image_url: result.imageUrl,
+            cost,
           },
+          mode: result.mode,
         });
       } else {
         throw new Error('生成失败');
@@ -152,7 +134,7 @@ export async function onRequest(context) {
           status: 'failed',
           error_message: genError.message || '生成失败',
         })
-        .eq('id', recordId);
+        .eq('id', imageId);
 
       // 退还次数
       await supabase
@@ -164,6 +146,10 @@ export async function onRequest(context) {
     }
   } catch (error) {
     console.error('生成图片接口错误:', error);
-    return errorResponse(`服务器错误: ${error.message || '未知错误'}`, 500);
+    return errorResponse('生成失败，请稍后重试', 500);
   }
+}
+
+export async function onRequestOptions() {
+  return handleOptions();
 }
