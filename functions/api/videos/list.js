@@ -43,40 +43,55 @@ export async function onRequestGet(context) {
         const statusResult = await getVideoTaskStatus(video.task_id, env);
 
         if (statusResult.status === 'succeeded') {
-          // 视频生成成功
-          await supabase
-            .from('videos')
-            .update({
+          // 视频生成成功（直接用 fetch）
+          await fetch(`${env.SUPABASE_URL}/rest/v1/videos?id=eq.${video.id}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
               status: 'succeeded',
               video_url: statusResult.video_url,
               thumbnail_url: statusResult.thumbnail_url,
-            })
-            .eq('id', video.id);
+            }),
+          });
 
           video.status = 'succeeded';
           video.video_url = statusResult.video_url;
           video.thumbnail_url = statusResult.thumbnail_url;
         } else if (statusResult.status === 'failed') {
-          // 视频生成失败
-          await supabase
-            .from('videos')
-            .update({
+          // 视频生成失败（直接用 fetch）
+          await fetch(`${env.SUPABASE_URL}/rest/v1/videos?id=eq.${video.id}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
               status: 'failed',
               error_message: statusResult.error_message || '生成失败',
-            })
-            .eq('id', video.id);
+            }),
+          });
 
-          // 失败时退还次数
+          // 失败时退还次数（直接用 fetch）
           const { data: users } = await supabase
             .from('users')
             .select('balance')
             .eq('id', userId);
 
           if (users?.[0]) {
-            await supabase
-              .from('users')
-              .update({ balance: users[0].balance + (video.cost || 1) })
-              .eq('id', userId);
+            await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+                'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ balance: users[0].balance + (video.cost || 1) }),
+            });
           }
 
           video.status = 'failed';

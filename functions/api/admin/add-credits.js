@@ -39,14 +39,21 @@ export async function onRequestPost(context) {
     const user = users[0];
     const newBalance = Math.max(0, (user.balance || 0) + creditsNum);
 
-    // 更新余额
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ balance: newBalance })
-      .eq('id', userId);
+    // 更新余额（直接用 fetch，确保 100% 生效）
+    const updateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify({ balance: newBalance }),
+    });
 
-    if (updateError) {
-      console.error('更新用户余额失败:', updateError);
+    if (!updateRes.ok) {
+      const err = await updateRes.json().catch(() => ({}));
+      console.error('更新用户余额失败:', err);
       return errorResponse('操作失败，请稍后重试', 500);
     }
 

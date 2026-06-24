@@ -37,17 +37,23 @@ export async function onRequestPost(context) {
       return errorResponse('订单已支付，无需重复确认');
     }
 
-    // 更新订单状态
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({
+    // 更新订单状态（直接用 fetch）
+    const orderUpdateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/orders?id=eq.${orderId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         status: 'paid',
         paid_at: new Date().toISOString(),
-      })
-      .eq('id', orderId);
+      }),
+    });
 
-    if (updateError) {
-      console.error('更新订单状态失败:', updateError);
+    if (!orderUpdateRes.ok) {
+      const err = await orderUpdateRes.json().catch(() => ({}));
+      console.error('更新订单状态失败:', err);
       return errorResponse('确认失败，请稍后重试', 500);
     }
 
@@ -64,13 +70,20 @@ export async function onRequestPost(context) {
     const user = users[0];
     const newBalance = (user.balance || 0) + (order.credits || 0);
 
-    const { error: balanceError } = await supabase
-      .from('users')
-      .update({ balance: newBalance })
-      .eq('id', order.user_id);
+    // 更新用户余额（直接用 fetch）
+    const balanceUpdateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${order.user_id}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ balance: newBalance }),
+    });
 
-    if (balanceError) {
-      console.error('更新用户余额失败:', balanceError);
+    if (!balanceUpdateRes.ok) {
+      const err = await balanceUpdateRes.json().catch(() => ({}));
+      console.error('更新用户余额失败:', err);
       return errorResponse('余额更新失败，请手动处理', 500);
     }
 

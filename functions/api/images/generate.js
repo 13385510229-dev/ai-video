@@ -73,13 +73,18 @@ export async function onRequestPost(context) {
       return errorResponse(`创建记录失败: ${errMsg}`, 500);
     }
 
-    // 扣除余额
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ balance: user.balance - cost })
-      .eq('id', userId);
-
-    if (updateError) {
+    // 扣除余额（直接用 fetch，确保 100% 生效）
+    try {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ balance: user.balance - cost }),
+      });
+    } catch (updateError) {
       console.error('扣除余额失败:', updateError);
       // 即使扣除失败也继续，后面可以补扣
     }
@@ -97,14 +102,19 @@ export async function onRequestPost(context) {
       });
 
       if (result.success) {
-        // 更新记录为成功
-        await supabase
-          .from('images')
-          .update({
+        // 更新记录为成功（直接用 fetch）
+        await fetch(`${env.SUPABASE_URL}/rest/v1/images?id=eq.${imageId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             status: 'succeeded',
             image_url: result.imageUrl,
-          })
-          .eq('id', imageId);
+          }),
+        });
 
         return jsonResponse({
           success: true,
@@ -128,20 +138,38 @@ export async function onRequestPost(context) {
     } catch (genError) {
       console.error('图片生成失败:', genError);
 
-      // 更新记录为失败
-      await supabase
-        .from('images')
-        .update({
-          status: 'failed',
-          error_message: genError.message || '生成失败',
-        })
-        .eq('id', imageId);
+      // 更新记录为失败（直接用 fetch）
+      try {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/images?id=eq.${imageId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'failed',
+            error_message: genError.message || '生成失败',
+          }),
+        });
+      } catch (e) {
+        console.error('更新失败状态出错:', e);
+      }
 
-      // 退还次数
-      await supabase
-        .from('users')
-        .update({ balance: user.balance })
-        .eq('id', userId);
+      // 退还次数（直接用 fetch）
+      try {
+        await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ balance: user.balance }),
+        });
+      } catch (e) {
+        console.error('退还次数出错:', e);
+      }
 
       return errorResponse(genError.message || '生成失败，请稍后重试');
     }

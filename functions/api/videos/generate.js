@@ -76,13 +76,18 @@ export async function onRequestPost(context) {
       console.warn('Agnes API 调用失败，已降级到模拟模式:', taskResult.error);
     }
 
-    // 扣除余额
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ balance: user.balance - cost })
-      .eq('id', userId);
-
-    if (updateError) {
+    // 扣除余额（直接用 fetch，确保 100% 生效）
+    try {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ balance: user.balance - cost }),
+      });
+    } catch (updateError) {
       console.error('扣除余额失败:', updateError);
       // 即使扣除失败也继续，后面可以补扣
     }
