@@ -115,7 +115,7 @@ export async function onRequestPost(context) {
     });
   } catch (error) {
     console.error('生成视频失败:', error);
-    return errorResponse('生成失败，请稍后重试', 500);
+    return errorResponse(`生成失败: ${error.message || JSON.stringify(error)}`, 500);
   }
 }
 

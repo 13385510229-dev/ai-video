@@ -69,7 +69,8 @@ export async function onRequestPost(context) {
 
     if (insertError) {
       console.error('保存图片记录失败:', insertError);
-      return errorResponse('创建失败，请稍后重试', 500);
+      const errMsg = insertError.message || JSON.stringify(insertError);
+      return errorResponse(`创建记录失败: ${errMsg}`, 500);
     }
 
     // 扣除余额
@@ -146,7 +147,7 @@ export async function onRequestPost(context) {
     }
   } catch (error) {
     console.error('生成图片接口错误:', error);
-    return errorResponse('生成失败，请稍后重试', 500);
+    return errorResponse(`生成失败: ${error.message || JSON.stringify(error)}`, 500);
   }
 }
 
