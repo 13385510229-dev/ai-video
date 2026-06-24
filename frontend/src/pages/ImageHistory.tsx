@@ -76,8 +76,25 @@ export default function ImageHistory() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 animate-fade-in">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div>
+      <div className="max-w-7xl mx-auto animate-fade-in">
+        <div className="flex items-center justify-between mb-8 animate-slide-up">
+          <div>
+            <div className="skeleton h-8 w-32 mb-2"></div>
+            <div className="skeleton h-4 w-24"></div>
+          </div>
+          <div className="skeleton h-10 w-32 rounded-lg"></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <div key={i} className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 animate-slide-up" style={{ animationDelay: `${i * 0.05}s` }}>
+              <div className="skeleton aspect-video"></div>
+              <div className="p-4">
+                <div className="skeleton h-4 w-full mb-2"></div>
+                <div className="skeleton h-3 w-1/2"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -101,7 +118,7 @@ export default function ImageHistory() {
       {/* 标题 */}
       <div className="flex items-center justify-between mb-8 animate-slide-up">
         <div>
-          <h1 className="text-3xl font-bold mb-2">图片历史</h1>
+          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-pink-400 to-purple-500 bg-clip-text text-transparent">图片历史</h1>
           <p className="text-gray-500">共 {images.length} 张图片</p>
         </div>
         <Link
@@ -130,7 +147,7 @@ export default function ImageHistory() {
           {images.map((image, index) => (
             <div
               key={image.id}
-              className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 hover:border-pink-500/50 hover:shadow-lg hover:shadow-pink-500/10 transition-all duration-300 group animate-slide-up"
+              className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 hover:border-pink-500/50 hover:shadow-lg hover:shadow-pink-500/10 transition-all duration-300 group animate-slide-up card-shine"
               style={{ animationDelay: `${index * 0.05}s` }}
             >
               {/* 图片预览 */}

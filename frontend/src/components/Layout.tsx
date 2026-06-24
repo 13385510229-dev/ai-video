@@ -1,10 +1,20 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
+import { useState, useEffect } from 'react';
 
 const Layout = () => {
   const { user, isLoggedIn, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -23,8 +33,12 @@ const Layout = () => {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* 导航栏 */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b ${
+        scrolled 
+          ? 'bg-black/70 backdrop-blur-xl border-gray-800/50 py-3 shadow-lg shadow-black/20' 
+          : 'bg-transparent backdrop-blur-md border-transparent py-4'
+      }`}>
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between transition-all duration-300">
           <Link to="/" className="text-2xl font-bold tracking-tight">
             AI<span className="text-gray-400">-HTY</span>
           </Link>

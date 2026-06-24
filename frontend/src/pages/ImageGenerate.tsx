@@ -92,9 +92,9 @@ export default function ImageGenerate() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* 标题 */}
-      <div className="text-center mb-12 animate-fade-in">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-          AI <span className="text-gray-400">图片生成</span>
+      <div className="text-center mb-12 animate-slide-up">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-pink-400 via-pink-500 to-purple-500 bg-clip-text text-transparent">
+          AI 图片生成
         </h1>
         <p className="text-gray-500 text-lg">
           用文字描述你想要的画面，AI 为你生成精美图片

@@ -76,18 +76,25 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
-      <div className="w-full max-w-md animate-scale-in">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold mb-2">
-            AI<span className="text-gray-400">-HTY</span>
+    <div className="min-h-screen flex items-center justify-center px-6 relative overflow-hidden">
+      {/* 背景渐变动画 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-pink-500/5 to-transparent rounded-full blur-3xl animate-pulse-soft"></div>
+        <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/5 to-transparent rounded-full blur-3xl animate-pulse-soft" style={{ animationDelay: '1s' }}></div>
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        <div className="text-center mb-10 animate-slide-up">
+          <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-pink-400 via-pink-500 to-purple-500 bg-clip-text text-transparent">
+            AI-HTY
           </h1>
           <p className="text-gray-400">登录以继续使用</p>
         </div>
 
-        <div className="card">
-          {step === 1 ? (
-            <>
+        <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          <div className="relative overflow-hidden">
+            {/* 步骤1 */}
+            <div className={`transition-all duration-500 ease-out ${step === 1 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full absolute inset-0'}`}>
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">
                   邮箱地址
@@ -103,7 +110,7 @@ const Login = () => {
               </div>
 
               {error && (
-                <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm animate-shake">
                   {error}
                 </div>
               )}
@@ -111,13 +118,21 @@ const Login = () => {
               <button
                 onClick={handleSendCode}
                 disabled={loading || !email.trim()}
-                className="btn btn-primary w-full"
+                className="btn btn-primary w-full relative overflow-hidden group"
               >
-                {loading ? '发送中...' : '发送验证码'}
+                <span className={`transition-all duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
+                  发送验证码
+                </span>
+                {loading && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
+                  </div>
+                )}
               </button>
-            </>
-          ) : (
-            <>
+            </div>
+
+            {/* 步骤2 */}
+            <div className={`transition-all duration-500 ease-out ${step === 2 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full absolute inset-0'}`}>
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">
                   验证码
@@ -146,7 +161,7 @@ const Login = () => {
               </div>
 
               {error && (
-                <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm animate-shake">
                   {error}
                 </div>
               )}
@@ -154,9 +169,16 @@ const Login = () => {
               <button
                 onClick={handleVerify}
                 disabled={loading || !code.trim()}
-                className="btn btn-primary w-full mb-4"
+                className="btn btn-primary w-full mb-4 relative overflow-hidden"
               >
-                {loading ? '验证中...' : '登录'}
+                <span className={`transition-all duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
+                  登录
+                </span>
+                {loading && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
+                  </div>
+                )}
               </button>
 
               <button
@@ -165,11 +187,11 @@ const Login = () => {
               >
                 ← 更换邮箱
               </button>
-            </>
-          )}
+            </div>
+          </div>
         </div>
 
-        <div className="mt-6 text-center text-sm text-gray-500">
+        <div className="mt-6 text-center text-sm text-gray-500 animate-slide-up" style={{ animationDelay: '0.2s' }}>
           <p>新用户登录即注册，首次登录赠送 3 次免费生成机会</p>
         </div>
       </div>

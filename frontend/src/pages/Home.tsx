@@ -127,7 +127,7 @@ const Home = () => {
   return (
     <div className="max-w-4xl mx-auto px-6 py-12 animate-fade-in">
       <div className="text-center mb-12 animate-slide-up">
-        <h1 className="text-5xl font-bold mb-4 tracking-tight">
+        <h1 className="text-5xl font-bold mb-4 tracking-tight bg-gradient-to-r from-pink-400 via-pink-500 to-purple-500 bg-clip-text text-transparent">
           AI 视频生成
         </h1>
         <p className="text-gray-400 text-lg">
