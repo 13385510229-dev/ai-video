@@ -4,9 +4,6 @@ interface Particle {
   x: number;
   y: number;
   z: number;
-  vx: number;
-  vy: number;
-  vz: number;
   size: number;
   opacity: number;
   originalX: number;
@@ -19,7 +16,7 @@ const ParticleBackground = () => {
   const particlesRef = useRef<Particle[]>([]);
   const mouseRef = useRef({ x: 0, y: 0, active: false });
   const animationRef = useRef<number>(0);
-  const angleRef = useRef(0);
+  const timeRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,28 +33,59 @@ const ParticleBackground = () => {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // 初始化更多粒子（400个）
-    const particleCount = 400;
+    // 生成编织形状的粒子（参数化3D曲面）
     const particles: Particle[] = [];
+    
+    // 参数：生成一个扭曲的圆环面，类似编织效果
+    const R = 180; // 主半径
+    const r = 80;  // 管半径
+    const twists = 3; // 扭曲次数
+    const particleCount = 2500; // 粒子数量，非常密集
 
     for (let i = 0; i < particleCount; i++) {
-      // 螺旋分布
-      const angle = (i / particleCount) * Math.PI * 8;
-      const radius = 50 + (i / particleCount) * 200;
-      const y = (i / particleCount - 0.5) * 400;
+      // 随机参数
+      const u = Math.random() * Math.PI * 2;
+      const v = Math.random() * Math.PI * 2;
+      
+      // 扭曲的圆环面参数方程
+      const twistAngle = u * twists;
+      const radius = R + r * Math.cos(v + twistAngle * 0.5);
+      
+      const x = radius * Math.cos(u);
+      const y = radius * Math.sin(u) * 0.6; // 稍微压扁一点
+      const z = r * Math.sin(v + twistAngle * 0.5) + Math.sin(u * 2) * 20;
 
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+      // 再加一些随机偏移，让它更自然
+      const noise = (Math.random() - 0.5) * 3;
+
+      particles.push({
+        x: x + noise,
+        y: y + noise,
+        z: z + noise,
+        size: Math.random() * 1 + 0.5,
+        opacity: Math.random() * 0.5 + 0.3,
+        originalX: x,
+        originalY: y,
+        originalZ: z,
+      });
+    }
+
+    // 再加一些外层散点，增加层次感
+    for (let i = 0; i < 300; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      const radius = 250 + Math.random() * 80;
+
+      const x = radius * Math.sin(phi) * Math.cos(theta);
+      const y = radius * Math.sin(phi) * Math.sin(theta) * 0.6;
+      const z = radius * Math.cos(phi);
 
       particles.push({
         x,
         y,
         z,
-        vx: 0,
-        vy: 0,
-        vz: 0,
-        size: Math.random() * 2 + 1,
-        opacity: Math.random() * 0.5 + 0.3,
+        size: Math.random() * 0.8 + 0.3,
+        opacity: Math.random() * 0.2 + 0.1,
         originalX: x,
         originalY: y,
         originalZ: z,
@@ -84,120 +112,100 @@ const ParticleBackground = () => {
     const animate = () => {
       if (!canvas || !ctx) return;
 
+      timeRef.current += 0.005;
+
       // 黑色背景
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // 缓慢旋转角度
-      angleRef.current += 0.002;
 
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
       const fov = 500;
 
-      // 更新和绘制粒子
-      const projectedParticles: { x: number; y: number; size: number; opacity: number; z: number }[] = [];
+      // 鼠标影响旋转
+      let rotX = 0.3;
+      let rotY = timeRef.current;
+      
+      if (mouseRef.current.active) {
+        const dx = (mouseRef.current.x - centerX) / centerX;
+        const dy = (mouseRef.current.y - centerY) / centerY;
+        rotY += dx * 0.5;
+        rotX += dy * 0.3;
+      }
+
+      const cosX = Math.cos(rotX);
+      const sinX = Math.sin(rotX);
+      const cosY = Math.cos(rotY);
+      const sinY = Math.sin(rotY);
+
+      // 存储投影后的粒子
+      const projected: {
+        x: number;
+        y: number;
+        z: number;
+        size: number;
+        opacity: number;
+      }[] = [];
 
       for (const particle of particlesRef.current) {
-        // 鼠标吸引效果
-        if (mouseRef.current.active) {
-          const dx = mouseRef.current.x - centerX;
-          const dy = mouseRef.current.y - centerY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const force = Math.max(0, 200 - distance) / 200;
+        // 3D 旋转（先绕Y轴，再绕X轴）
+        let x = particle.originalX;
+        let y = particle.originalY;
+        let z = particle.originalZ;
 
-          particle.vx += (dx / distance) * force * 0.5;
-          particle.vy += (dy / distance) * force * 0.5;
-        }
+        // 绕 Y 轴旋转
+        const x1 = x * cosY - z * sinY;
+        const z1 = x * sinY + z * cosY;
 
-        // 回到原位的力
-        particle.vx += (particle.originalX - particle.x) * 0.005;
-        particle.vy += (particle.originalY - particle.y) * 0.005;
-        particle.vz += (particle.originalZ - particle.z) * 0.005;
-
-        // 阻尼
-        particle.vx *= 0.95;
-        particle.vy *= 0.95;
-        particle.vz *= 0.95;
-
-        // 更新位置
-        particle.x += particle.vx;
-        particle.y += particle.vy;
-        particle.z += particle.vz;
-
-        // 3D 旋转
-        const cosA = Math.cos(angleRef.current);
-        const sinA = Math.sin(angleRef.current);
-        const rotatedX = particle.x * cosA - particle.z * sinA;
-        const rotatedZ = particle.x * sinA + particle.z * cosA;
+        // 绕 X 轴旋转
+        const y2 = y * cosX - z1 * sinX;
+        const z2 = y * sinX + z1 * cosX;
 
         // 透视投影
-        const scale = fov / (fov + rotatedZ + 200);
-        const projX = centerX + rotatedX * scale;
-        const projY = centerY + particle.y * scale;
+        const scale = fov / (fov + z2 + 300);
+        const projX = centerX + x1 * scale;
+        const projY = centerY + y2 * scale;
         const projSize = particle.size * scale;
         const projOpacity = particle.opacity * scale;
 
-        projectedParticles.push({
+        projected.push({
           x: projX,
           y: projY,
+          z: z2,
           size: projSize,
-          opacity: projOpacity,
-          z: rotatedZ,
+          opacity: Math.min(1, projOpacity),
         });
       }
 
       // 按 z 排序，远的先画
-      projectedParticles.sort((a, b) => a.z - b.z);
+      projected.sort((a, b) => a.z - b.z);
 
-      // 绘制粒子连线（距离近的连起来）
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-      ctx.lineWidth = 0.5;
+      // 绘制粒子
+      for (const p of projected) {
+        if (p.opacity < 0.02) continue;
 
-      for (let i = 0; i < projectedParticles.length; i++) {
-        for (let j = i + 1; j < projectedParticles.length; j++) {
-          const p1 = projectedParticles[i];
-          const p2 = projectedParticles[j];
-          const dx = p1.x - p2.x;
-          const dy = p1.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < 80) {
-            ctx.globalAlpha = (1 - dist / 80) * 0.1;
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
-          }
-        }
-      }
-
-      ctx.globalAlpha = 1;
-
-      // 绘制粒子（白色）
-      for (const particle of projectedParticles) {
-        // 粒子发光效果
+        // 粒子发光
         const gradient = ctx.createRadialGradient(
-          particle.x,
-          particle.y,
+          p.x,
+          p.y,
           0,
-          particle.x,
-          particle.y,
-          particle.size * 3
+          p.x,
+          p.y,
+          p.size * 3
         );
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${particle.opacity})`);
-        gradient.addColorStop(0.5, `rgba(255, 255, 255, ${particle.opacity * 0.3})`);
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${p.opacity})`);
+        gradient.addColorStop(0.5, `rgba(255, 255, 255, ${p.opacity * 0.3})`);
         gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.size * 3, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
         ctx.fill();
 
         // 粒子核心
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, particle.opacity + 0.3)})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, p.opacity + 0.2)})`;
         ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
       }
 

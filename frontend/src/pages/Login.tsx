@@ -12,7 +12,7 @@ const Login = () => {
   const [countdown, setCountdown] = useState(0);
 
   const navigate = useNavigate();
-  const { login, isLoggedIn } = useAuthStore();
+  const { setToken, setUser, isLoggedIn } = useAuthStore();
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -77,7 +77,8 @@ const Login = () => {
       const data = await response.json();
 
       if (data.success && data.token) {
-        login(data.token, data.user);
+        setToken(data.token);
+        setUser(data.user);
         navigate('/');
       } else {
         setError(data.error || '验证码错误');
