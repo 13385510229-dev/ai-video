@@ -3,11 +3,17 @@ import { createSupabaseClient } from '../_lib/supabase.js';
 import { requireAuth, jsonResponse, errorResponse, handleOptions } from '../_lib/auth.js';
 import { generateImage } from '../_lib/imageService.js';
 
-export async function onRequestPost(context) {
+export async function onRequest(context) {
   const { request, env } = context;
 
+  // 处理 OPTIONS 预检请求
   if (request.method === 'OPTIONS') {
     return handleOptions();
+  }
+
+  // 只允许 POST 方法
+  if (request.method !== 'POST') {
+    return errorResponse('方法不允许', 405);
   }
 
   try {
@@ -142,6 +148,6 @@ export async function onRequestPost(context) {
     }
   } catch (error) {
     console.error('生成图片接口错误:', error);
-    return errorResponse('服务器内部错误', 500);
+    return errorResponse(`服务器错误: ${error.message || '未知错误'}`, 500);
   }
 }
