@@ -68,10 +68,16 @@ export async function onRequest(context) {
       return errorResponse(`扣除次数失败: ${updateError.message || JSON.stringify(updateError)}`);
     }
 
-    // 先插入记录，状态为 processing
-    const { data: imageRecord, error: insertError } = await supabase
-      .from('images')
-      .insert({
+    // 先插入记录，状态为 processing（直接用 fetch，绕过客户端 bug）
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/images`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify({
         user_id: userId,
         prompt: prompt.trim(),
         negative_prompt: negativePrompt?.trim() || null,
@@ -79,18 +85,21 @@ export async function onRequest(context) {
         size: size || '1024x768',
         status: 'processing',
         cost,
-      });
+      }),
+    });
 
-    if (insertError) {
+    if (!insertRes.ok) {
+      const err = await insertRes.json().catch(() => ({}));
       // 回滚余额
       await supabase
         .from('users')
         .update({ balance: user.balance })
         .eq('id', userId);
-      return errorResponse(`创建记录失败: ${insertError.message || JSON.stringify(insertError)}`);
+      return errorResponse(`创建记录失败: ${err.message || JSON.stringify(err)}`);
     }
 
-    const record = imageRecord?.[0] || imageRecord;
+    const insertData = await insertRes.json();
+    const record = Array.isArray(insertData) ? insertData[0] : insertData;
 
     // 同步生成图片
     try {
