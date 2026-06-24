@@ -36,11 +36,11 @@ export async function onRequestDelete(context) {
 
     if (queryError) {
       console.error('查询视频失败:', queryError);
-      return errorResponse('操作失败，请稍后重试', 500);
+      return errorResponse(`查询失败: ${queryError.message || JSON.stringify(queryError)}`, 500);
     }
 
     if (!videos?.[0]) {
-      return errorResponse('视频不存在', 404);
+      return errorResponse('视频不存在或无权删除', 404);
     }
 
     // 删除视频
@@ -51,7 +51,7 @@ export async function onRequestDelete(context) {
 
     if (deleteError) {
       console.error('删除视频失败:', deleteError);
-      return errorResponse('删除失败，请稍后重试', 500);
+      return errorResponse(`删除失败: ${deleteError.message || JSON.stringify(deleteError)}`, 500);
     }
 
     return jsonResponse({
@@ -59,8 +59,8 @@ export async function onRequestDelete(context) {
       message: '删除成功',
     });
   } catch (error) {
-    console.error('删除视频失败:', error);
-    return errorResponse('删除失败，请稍后重试', 500);
+    console.error('删除视频接口错误:', error);
+    return errorResponse(`服务器错误: ${error.message || '未知错误'}`, 500);
   }
 }
 
