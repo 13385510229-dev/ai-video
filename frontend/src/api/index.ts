@@ -66,6 +66,11 @@ export const verifyLogin = (email: string, code: string) => {
   return api.post('/auth/verify', { email, code });
 };
 
+// 获取当前用户信息
+export const getUserProfile = () => {
+  return api.get('/users/profile');
+};
+
 // ==================== 视频相关 ====================
 
 // 生成视频

@@ -6,7 +6,7 @@ import { IMAGE_SIZES, IMAGE_STYLES, IMAGE_MODES } from '../types';
 
 export default function ImageGenerate() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, deductCredits } = useAuthStore();
 
   const [mode, setMode] = useState('text2image');
   const [prompt, setPrompt] = useState('');
@@ -79,6 +79,8 @@ export default function ImageGenerate() {
 
       if (res.data.success) {
         setGeneratedImage(res.data.image.image_url);
+        // 扣除本地余额，立马看到效果
+        deductCredits(cost);
       } else {
         setError(res.data.message || '生成失败');
       }

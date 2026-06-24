@@ -6,7 +6,7 @@ import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS, VIDEO_MODES } from '../ty
 
 const Home = () => {
   const navigate = useNavigate();
-  const { user, setUser } = useAuthStore();
+  const { user, deductCredits } = useAuthStore();
   const [mode, setMode] = useState('ti2vid');
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
@@ -108,10 +108,8 @@ const Home = () => {
       const res = await generateVideo(params);
 
       if (res.data.success) {
-        // 更新本地余额
-        if (user) {
-          setUser({ ...user, balance: user.balance - currentCost });
-        }
+        // 扣除本地余额，立马看到效果
+        deductCredits(currentCost);
         // 跳转到历史记录
         navigate('/history');
       } else {

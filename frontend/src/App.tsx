@@ -37,11 +37,18 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 function App() {
-  const { initAuth } = useAuthStore();
+  const { initAuth, isLoggedIn, refreshUser } = useAuthStore();
 
   useEffect(() => {
     initAuth();
   }, [initAuth]);
+
+  // 登录后自动刷新用户信息，确保余额是最新的
+  useEffect(() => {
+    if (isLoggedIn) {
+      refreshUser();
+    }
+  }, [isLoggedIn, refreshUser]);
 
   return (
     <Routes>
