@@ -13,12 +13,55 @@ const Home = () => {
   const [style, setStyle] = useState('realistic');
   const [duration, setDuration] = useState(5);
   const [aspectRatio, setAspectRatio] = useState('16:9');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageUrls, setImageUrls] = useState(['', '']);
+  const [singleFile, setSingleFile] = useState<File | null>(null);
+  const [singleImageBase64, setSingleImageBase64] = useState('');
+  const [multipleFiles, setMultipleFiles] = useState<File[]>([null as any, null as any]);
+  const [multipleImageBase64s, setMultipleImageBase64s] = useState<string[]>(['', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const currentCost = VIDEO_DURATIONS.find(d => d.value === duration)?.cost || 1;
+
+  // 文件转 Base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // 处理单图选择
+  const handleSingleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSingleFile(file);
+      const base64 = await fileToBase64(file);
+      setSingleImageBase64(base64);
+    }
+  };
+
+  // 处理多图选择
+  const handleMultipleFileChange = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const newFiles = [...multipleFiles];
+      newFiles[index] = file;
+      setMultipleFiles(newFiles);
+
+      const base64 = await fileToBase64(file);
+      const newBase64s = [...multipleImageBase64s];
+      newBase64s[index] = base64;
+      setMultipleImageBase64s(newBase64s);
+    }
+  };
+
+  // 添加更多图片
+  const addMoreImages = () => {
+    setMultipleFiles([...multipleFiles, null as any]);
+    setMultipleImageBase64s([...multipleImageBase64s, '']);
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -27,14 +70,14 @@ const Home = () => {
     }
 
     // 图生视频模式需要图片
-    if (mode === 'i2v' && !imageUrl.trim()) {
-      setError('请输入参考图片 URL');
+    if (mode === 'i2v' && !singleImageBase64) {
+      setError('请选择参考图片');
       return;
     }
 
     // 多图/关键帧模式需要至少一张图
-    if ((mode === 'multi-image' || mode === 'keyframes') && imageUrls.filter(u => u.trim()).length === 0) {
-      setError('请至少输入一张参考图片 URL');
+    if ((mode === 'multi-image' || mode === 'keyframes') && multipleImageBase64s.filter(u => u).length === 0) {
+      setError('请至少选择一张参考图片');
       return;
     }
 
@@ -57,9 +100,9 @@ const Home = () => {
       };
 
       if (mode === 'i2v') {
-        params.image = imageUrl.trim();
+        params.image = singleImageBase64;
       } else if (mode === 'multi-image' || mode === 'keyframes') {
-        params.images = imageUrls.filter(u => u.trim());
+        params.images = multipleImageBase64s.filter(u => u);
       }
 
       const res = await generateVideo(params);
@@ -120,17 +163,41 @@ const Home = () => {
         {mode === 'i2v' && (
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">
-              参考图片 URL <span className="text-red-500">*</span>
+              参考图片 <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="输入参考图片的 URL 地址..."
-              className="w-full"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              💡 上传图片到任意图床，复制图片链接粘贴到这里
+            <div className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-gray-500 transition-colors">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleSingleFileChange}
+                className="hidden"
+                id="single-image-upload"
+              />
+              <label htmlFor="single-image-upload" className="cursor-pointer">
+                {singleFile ? (
+                  <div>
+                    <p className="text-white font-medium">{singleFile.name}</p>
+                    <p className="text-xs text-gray-400 mt-1">点击重新选择</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-gray-400">点击选择图片，或拖拽到这里</p>
+                    <p className="text-xs text-gray-500 mt-1">支持 JPG、PNG、WebP 等格式</p>
+                  </div>
+                )}
+              </label>
+            </div>
+            {singleImageBase64 && (
+              <div className="mt-3">
+                <img
+                  src={singleImageBase64}
+                  alt="预览"
+                  className="max-h-48 mx-auto rounded-lg"
+                />
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-3">
+              💡 建议图片大小不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器，每次生成都需重新上传。
             </p>
           </div>
         )}
@@ -139,31 +206,51 @@ const Home = () => {
         {(mode === 'multi-image' || mode === 'keyframes') && (
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">
-              参考图片 URL <span className="text-red-500">*</span>
+              参考图片 <span className="text-red-500">*</span>
             </label>
-            {imageUrls.map((url, index) => (
-              <div key={index} className="mb-2">
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => {
-                    const newUrls = [...imageUrls];
-                    newUrls[index] = e.target.value;
-                    setImageUrls(newUrls);
-                  }}
-                  placeholder={`图片 ${index + 1} URL...`}
-                  className="w-full"
-                />
-              </div>
-            ))}
+            <div className="space-y-3">
+              {multipleFiles.map((file, index) => (
+                <div key={index} className="border-2 border-dashed border-gray-700 rounded-lg p-4 hover:border-gray-500 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleMultipleFileChange(index, e)}
+                    className="hidden"
+                    id={`multi-image-upload-${index}`}
+                  />
+                  <label htmlFor={`multi-image-upload-${index}`} className="cursor-pointer block">
+                    {file ? (
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={multipleImageBase64s[index]}
+                          alt={`图片 ${index + 1}`}
+                          className="w-16 h-16 object-cover rounded"
+                        />
+                        <div>
+                          <p className="text-white font-medium text-sm">{file.name}</p>
+                          <p className="text-xs text-gray-400">点击重新选择</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-2">
+                        <p className="text-gray-400 text-sm">图片 {index + 1}：点击选择</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              ))}
+            </div>
             <button
-              onClick={() => setImageUrls([...imageUrls, ''])}
-              className="text-sm text-gray-400 hover:text-white transition-colors"
+              onClick={addMoreImages}
+              className="mt-3 text-sm text-gray-400 hover:text-white transition-colors"
             >
               + 添加更多图片
             </button>
             <p className="text-xs text-gray-500 mt-2">
               💡 {mode === 'keyframes' ? '关键帧模式：按顺序排列，第一张为起始帧，最后一张为结束帧' : '多图模式：上传多张参考图片引导视频生成'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              ⚠️ 建议单张图片不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器。
             </p>
           </div>
         )}

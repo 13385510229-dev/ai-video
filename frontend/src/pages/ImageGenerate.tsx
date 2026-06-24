@@ -13,12 +13,33 @@ export default function ImageGenerate() {
   const [negativePrompt, setNegativePrompt] = useState('');
   const [style, setStyle] = useState('realistic');
   const [size, setSize] = useState('1024x768');
-  const [referenceImage, setReferenceImage] = useState('');
+  const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  const [referenceImageBase64, setReferenceImageBase64] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const cost = 1; // 每张图片消耗 1 次
+
+  // 文件转 Base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // 处理参考图选择
+  const handleReferenceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setReferenceFile(file);
+      const base64 = await fileToBase64(file);
+      setReferenceImageBase64(base64);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -27,8 +48,8 @@ export default function ImageGenerate() {
     }
 
     // 图生图模式需要参考图
-    if (mode === 'image2image' && !referenceImage.trim()) {
-      setError('请输入参考图片 URL');
+    if (mode === 'image2image' && !referenceImageBase64) {
+      setError('请选择参考图片');
       return;
     }
 
@@ -51,7 +72,7 @@ export default function ImageGenerate() {
       };
 
       if (mode === 'image2image') {
-        params.image = referenceImage.trim();
+        params.image = referenceImageBase64;
       }
 
       const res = await generateImage(params);
@@ -109,17 +130,37 @@ export default function ImageGenerate() {
         {mode === 'image2image' && (
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              参考图片 URL <span className="text-red-500">*</span>
+              参考图片 <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={referenceImage}
-              onChange={(e) => setReferenceImage(e.target.value)}
-              placeholder="输入参考图片的 URL 地址..."
-              className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-white transition-colors"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              💡 上传图片到任意图床，复制图片链接粘贴到这里
+            <div className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-gray-500 transition-colors">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleReferenceFileChange}
+                className="hidden"
+                id="reference-image-upload"
+              />
+              <label htmlFor="reference-image-upload" className="cursor-pointer block">
+                {referenceFile ? (
+                  <div>
+                    <img
+                      src={referenceImageBase64}
+                      alt="参考图预览"
+                      className="max-h-48 mx-auto rounded-lg mb-3"
+                    />
+                    <p className="text-white font-medium">{referenceFile.name}</p>
+                    <p className="text-xs text-gray-400 mt-1">点击重新选择</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-gray-400">点击选择图片，或拖拽到这里</p>
+                    <p className="text-xs text-gray-500 mt-1">支持 JPG、PNG、WebP 等格式</p>
+                  </div>
+                )}
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              💡 建议图片大小不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器，每次生成都需重新上传。
             </p>
           </div>
         )}
