@@ -47,8 +47,9 @@ export async function generateImage({
 
   // 图生图模式
   if (mode === 'image2image' && image) {
-    requestBody.mode = 'image2image';
-    requestBody.image = image;
+    requestBody.extra_body = {
+      image: [image], // 图生图参数放在 extra_body 里，数组格式
+    };
   }
 
   try {

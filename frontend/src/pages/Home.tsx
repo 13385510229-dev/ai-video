@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
-import { generateVideo } from '../api';
+import { generateVideo, uploadImage } from '../api';
 import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS, VIDEO_MODES } from '../types';
 
 const Home = () => {
@@ -15,20 +15,52 @@ const Home = () => {
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [singleFile, setSingleFile] = useState<File | null>(null);
   const [singleImageBase64, setSingleImageBase64] = useState('');
+  const [singleImageUrl, setSingleImageUrl] = useState('');
   const [multipleFiles, setMultipleFiles] = useState<File[]>([null as any, null as any]);
   const [multipleImageBase64s, setMultipleImageBase64s] = useState<string[]>(['', '']);
+  const [multipleImageUrls, setMultipleImageUrls] = useState<string[]>(['', '']);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
   const currentCost = VIDEO_DURATIONS.find(d => d.value === duration)?.cost || 1;
 
-  // 文件转 Base64
-  const fileToBase64 = (file: File): Promise<string> => {
+  // 压缩图片并转 Base64
+  const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.8): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          // 计算压缩后的尺寸
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = (maxWidth / width) * height;
+            width = maxWidth;
+          }
+          if (height > maxHeight) {
+            width = (maxHeight / height) * width;
+            height = maxHeight;
+          }
+
+          // 用 canvas 压缩
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // 转成 JPEG 格式的 Base64
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
     });
   };
 
@@ -37,8 +69,23 @@ const Home = () => {
     const file = e.target.files?.[0];
     if (file) {
       setSingleFile(file);
-      const base64 = await fileToBase64(file);
-      setSingleImageBase64(base64);
+      setError('');
+      setUploading(true);
+      try {
+        const base64 = await compressImage(file);
+        setSingleImageBase64(base64);
+        // 上传到服务器获取 URL
+        const res = await uploadImage(base64);
+        if (res.data.success) {
+          setSingleImageUrl(res.data.url);
+        } else {
+          setError(res.data.message || '图片上传失败');
+        }
+      } catch (err: any) {
+        setError('图片上传失败: ' + (err.message || '未知错误'));
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -49,11 +96,27 @@ const Home = () => {
       const newFiles = [...multipleFiles];
       newFiles[index] = file;
       setMultipleFiles(newFiles);
-
-      const base64 = await fileToBase64(file);
-      const newBase64s = [...multipleImageBase64s];
-      newBase64s[index] = base64;
-      setMultipleImageBase64s(newBase64s);
+      setError('');
+      setUploading(true);
+      try {
+        const base64 = await compressImage(file);
+        const newBase64s = [...multipleImageBase64s];
+        newBase64s[index] = base64;
+        setMultipleImageBase64s(newBase64s);
+        // 上传到服务器获取 URL
+        const res = await uploadImage(base64);
+        if (res.data.success) {
+          const newUrls = [...multipleImageUrls];
+          newUrls[index] = res.data.url;
+          setMultipleImageUrls(newUrls);
+        } else {
+          setError(res.data.message || '图片上传失败');
+        }
+      } catch (err: any) {
+        setError('图片上传失败: ' + (err.message || '未知错误'));
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -70,14 +133,14 @@ const Home = () => {
     }
 
     // 图生视频模式需要图片
-    if (mode === 'i2v' && !singleImageBase64) {
-      setError('请选择参考图片');
+    if (mode === 'i2v' && !singleImageUrl) {
+      setError(uploading ? '图片上传中，请稍候...' : '请选择参考图片');
       return;
     }
 
     // 多图/关键帧模式需要至少一张图
-    if ((mode === 'multi-image' || mode === 'keyframes') && multipleImageBase64s.filter(u => u).length === 0) {
-      setError('请至少选择一张参考图片');
+    if ((mode === 'multi-image' || mode === 'keyframes') && multipleImageUrls.filter(u => u).length === 0) {
+      setError(uploading ? '图片上传中，请稍候...' : '请至少选择一张参考图片');
       return;
     }
 
@@ -100,9 +163,9 @@ const Home = () => {
       };
 
       if (mode === 'i2v') {
-        params.image = singleImageBase64;
+        params.image = singleImageUrl;
       } else if (mode === 'multi-image' || mode === 'keyframes') {
-        params.images = multipleImageBase64s.filter(u => u);
+        params.images = multipleImageUrls.filter(u => u);
       }
 
       const res = await generateVideo(params);

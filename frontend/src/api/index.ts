@@ -86,7 +86,9 @@ export const generateVideo = (params: {
   seed?: number;
   numInferenceSteps?: number;
 }) => {
-  return api.post('/videos/generate', params);
+  return api.post('/videos/generate', params, {
+    timeout: 60000, // 带图片的模式可能需要更长时间
+  });
 };
 
 // 获取视频列表
@@ -133,6 +135,16 @@ export const getImageDetail = (id: string | number) => {
 // 删除图片
 export const deleteImage = (id: string | number) => {
   return api.delete(`/images/delete?id=${id}`);
+};
+
+// 上传图片到服务器
+export const uploadImage = (base64Image: string, filename?: string) => {
+  return api.post('/upload/image', {
+    image: base64Image,
+    filename,
+  }, {
+    timeout: 60000, // 上传图片超时时间设为 1 分钟
+  });
 };
 
 // ==================== 支付相关 ====================

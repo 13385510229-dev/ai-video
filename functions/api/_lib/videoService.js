@@ -102,22 +102,22 @@ export async function createVideoTask(params, env) {
     frame_rate,
   };
 
-  // 根据模式设置不同参数
+  // 根据模式设置不同参数（按官方文档）
   if (mode === 'i2v' && image) {
     // 图生视频模式
-    requestBody.mode = 'i2v';
-    requestBody.image = image;
+    requestBody.mode = 'ti2vid';
+    requestBody.image = image; // 顶层 image 参数，URL 格式
   } else if (mode === 'multi-image' && images && images.length > 0) {
     // 多图视频模式
-    requestBody.mode = 'i2v';
+    requestBody.mode = 'ti2vid';
     requestBody.extra_body = {
-      image: images,
+      image: images, // 多图 URL 数组
     };
   } else if (mode === 'keyframes' && images && images.length > 0) {
     // 关键帧动画模式
-    requestBody.mode = 'i2v';
+    requestBody.mode = 'keyframes';
     requestBody.extra_body = {
-      image: images,
+      image: images, // 关键帧 URL 数组
       mode: 'keyframes',
     };
   } else {

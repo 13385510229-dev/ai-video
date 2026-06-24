@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
-import { generateImage } from '../api';
+import { generateImage, uploadImage } from '../api';
 import { IMAGE_SIZES, IMAGE_STYLES, IMAGE_MODES } from '../types';
 
 export default function ImageGenerate() {
@@ -15,19 +15,50 @@ export default function ImageGenerate() {
   const [size, setSize] = useState('1024x768');
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referenceImageBase64, setReferenceImageBase64] = useState('');
+  const [referenceImageUrl, setReferenceImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const cost = 1; // 每张图片消耗 1 次
 
-  // 文件转 Base64
-  const fileToBase64 = (file: File): Promise<string> => {
+  // 压缩图片并转 Base64
+  const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.8): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          // 计算压缩后的尺寸
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = (maxWidth / width) * height;
+            width = maxWidth;
+          }
+          if (height > maxHeight) {
+            width = (maxHeight / height) * width;
+            height = maxHeight;
+          }
+
+          // 用 canvas 压缩
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // 转成 JPEG 格式的 Base64
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
     });
   };
 
@@ -36,8 +67,23 @@ export default function ImageGenerate() {
     const file = e.target.files?.[0];
     if (file) {
       setReferenceFile(file);
-      const base64 = await fileToBase64(file);
-      setReferenceImageBase64(base64);
+      setError('');
+      setUploading(true);
+      try {
+        const base64 = await compressImage(file);
+        setReferenceImageBase64(base64);
+        // 上传到服务器获取 URL
+        const res = await uploadImage(base64);
+        if (res.data.success) {
+          setReferenceImageUrl(res.data.url);
+        } else {
+          setError(res.data.message || '图片上传失败');
+        }
+      } catch (err: any) {
+        setError('图片上传失败: ' + (err.message || '未知错误'));
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -48,8 +94,8 @@ export default function ImageGenerate() {
     }
 
     // 图生图模式需要参考图
-    if (mode === 'image2image' && !referenceImageBase64) {
-      setError('请选择参考图片');
+    if (mode === 'image2image' && !referenceImageUrl) {
+      setError(uploading ? '图片上传中，请稍候...' : '请选择参考图片');
       return;
     }
 
@@ -72,7 +118,7 @@ export default function ImageGenerate() {
       };
 
       if (mode === 'image2image') {
-        params.image = referenceImageBase64;
+        params.image = referenceImageUrl;
       }
 
       const res = await generateImage(params);
