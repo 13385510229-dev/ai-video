@@ -3,13 +3,20 @@ import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib
 
 export const onRequestOptions = handleOptions;
 
-export const onRequestPost = requireAuth(async (context) => {
-  try {
-    const { env, data } = context;
-    const userId = data.userId;
+export const onRequestPost = async (context) => {
+  const { env, request } = context;
 
+  // 认证
+  const auth = await requireAuth(request, env);
+  if (auth.error) {
+    return errorResponse(auth.error, 401);
+  }
+  const user = auth.user;
+  const userId = user.sub;
+
+  try {
     // 读取请求体
-    const body = await context.request.json();
+    const body = await request.json();
     const { image: base64Image, filename } = body;
 
     if (!base64Image) {
@@ -37,10 +44,6 @@ export const onRequestPost = requireAuth(async (context) => {
     const bucketName = 'reference-images';
     const uploadUrl = `${env.SUPABASE_URL}/storage/v1/object/${bucketName}/${finalFilename}`;
 
-    console.log('上传图片到:', uploadUrl);
-    console.log('文件大小:', bytes.length, '字节');
-    console.log('Content-Type:', mimeType);
-
     const uploadRes = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
@@ -51,8 +54,6 @@ export const onRequestPost = requireAuth(async (context) => {
       },
       body: bytes,
     });
-
-    console.log('上传响应状态:', uploadRes.status);
 
     if (!uploadRes.ok) {
       const errText = await uploadRes.text().catch(() => '');
@@ -78,6 +79,6 @@ export const onRequestPost = requireAuth(async (context) => {
 
   } catch (error) {
     console.error('上传图片错误:', error);
-    return errorResponse(`上传失败: ${error.message}`);
+    return errorResponse(`上传失败: ${error.message}`, 500);
   }
-});
+};
