@@ -1,11 +1,17 @@
 import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
 
-export async function onRequestDelete(context) {
+export async function onRequest(context) {
   const { request, env } = context;
 
+  // 处理 OPTIONS 预检请求
   if (request.method === 'OPTIONS') {
     return handleOptions();
+  }
+
+  // 只允许 DELETE 方法
+  if (request.method !== 'DELETE') {
+    return errorResponse('方法不允许', 405);
   }
 
   try {
@@ -62,8 +68,4 @@ export async function onRequestDelete(context) {
     console.error('删除视频接口错误:', error);
     return errorResponse(`服务器错误: ${error.message || '未知错误'}`, 500);
   }
-}
-
-export async function onRequestOptions() {
-  return handleOptions();
 }

@@ -2,11 +2,17 @@
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { requireAuth, jsonResponse, errorResponse, handleOptions } from '../_lib/auth.js';
 
-export async function onRequestDelete(context) {
+export async function onRequest(context) {
   const { request, env } = context;
 
+  // 处理 OPTIONS 预检请求
   if (request.method === 'OPTIONS') {
     return handleOptions();
+  }
+
+  // 只允许 DELETE 方法
+  if (request.method !== 'DELETE') {
+    return errorResponse('方法不允许', 405);
   }
 
   try {
@@ -28,29 +34,30 @@ export async function onRequestDelete(context) {
     const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // 先检查图片是否存在且属于该用户
-    const { data: image, error: findError } = await supabase
+    const { data: images, error: findError } = await supabase
       .from('images')
       .select('id, user_id')
       .eq('id', id)
-      .single();
+      .eq('user_id', userId);
 
-    if (findError || !image) {
-      return errorResponse('图片不存在', 404);
+    if (findError) {
+      console.error('查询图片失败:', findError);
+      return errorResponse(`查询失败: ${findError.message || JSON.stringify(findError)}`, 500);
     }
 
-    if (image.user_id !== userId) {
-      return errorResponse('无权限删除', 403);
+    if (!images?.[0]) {
+      return errorResponse('图片不存在或无权删除', 404);
     }
 
     // 删除图片
-    const { error } = await supabase
+    const { error: deleteError } = await supabase
       .from('images')
       .delete()
       .eq('id', id);
 
-    if (error) {
-      console.error('删除图片错误:', error);
-      return errorResponse('删除失败');
+    if (deleteError) {
+      console.error('删除图片错误:', deleteError);
+      return errorResponse(`删除失败: ${deleteError.message || JSON.stringify(deleteError)}`, 500);
     }
 
     return jsonResponse({
@@ -59,6 +66,6 @@ export async function onRequestDelete(context) {
     });
   } catch (error) {
     console.error('删除图片接口错误:', error);
-    return errorResponse('服务器内部错误', 500);
+    return errorResponse(`服务器错误: ${error.message || '未知错误'}`, 500);
   }
 }

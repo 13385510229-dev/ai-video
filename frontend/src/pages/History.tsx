@@ -47,10 +47,10 @@ const History = () => {
       if (res.data.success) {
         setVideos(videos.filter(v => v.id !== id));
       } else {
-        setError(res.data.message || '删除失败');
+        setError(res.data.message || res.data.error || '删除失败');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || '删除失败，请稍后重试');
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || '删除失败，请稍后重试');
     } finally {
       setDeletingId(null);
     }
