@@ -68,6 +68,9 @@ export async function onRequest(context) {
       return errorResponse(`扣除次数失败: ${updateError.message || JSON.stringify(updateError)}`);
     }
 
+    // 生成唯一 ID（时间戳 + 随机数，避免自增主键冲突问题）
+    const imageId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+
     // 先插入记录，状态为 processing（直接用 fetch，绕过客户端 bug）
     const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/images`, {
       method: 'POST',
@@ -78,6 +81,7 @@ export async function onRequest(context) {
         'Prefer': 'return=representation',
       },
       body: JSON.stringify({
+        id: imageId,
         user_id: userId,
         prompt: prompt.trim(),
         negative_prompt: negativePrompt?.trim() || null,
@@ -100,6 +104,8 @@ export async function onRequest(context) {
 
     const insertData = await insertRes.json();
     const record = Array.isArray(insertData) ? insertData[0] : insertData;
+    // 确保 ID 正确（用我们自己生成的，更可靠）
+    const recordId = record?.id || imageId;
 
     // 同步生成图片
     try {
@@ -121,13 +127,14 @@ export async function onRequest(context) {
             status: 'succeeded',
             image_url: result.imageUrl,
           })
-          .eq('id', record.id);
+          .eq('id', recordId);
 
         return jsonResponse({
           success: true,
           message: '生成成功',
           image: {
             ...record,
+            id: recordId,
             status: 'succeeded',
             image_url: result.imageUrl,
           },
@@ -145,7 +152,7 @@ export async function onRequest(context) {
           status: 'failed',
           error_message: genError.message || '生成失败',
         })
-        .eq('id', record.id);
+        .eq('id', recordId);
 
       // 退还次数
       await supabase
