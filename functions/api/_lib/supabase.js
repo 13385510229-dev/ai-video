@@ -22,6 +22,7 @@ export function createSupabaseClient(supabaseUrl, serviceRoleKey) {
     };
 
     const builder = {
+      _state: state,
       select(columns = '*') {
         state.selectColumns = columns;
         return builder;
@@ -172,7 +173,7 @@ export function createSupabaseClient(supabaseUrl, serviceRoleKey) {
           builder.then = async function (resolve, reject) {
             try {
               const params = new URLSearchParams();
-              for (const [key, value] of Object.entries(builder.filters)) {
+              for (const [key, value] of Object.entries(builder._state.filters)) {
                 params.set(key, value);
               }
 
@@ -208,7 +209,7 @@ export function createSupabaseClient(supabaseUrl, serviceRoleKey) {
           builder.then = async function (resolve, reject) {
             try {
               const params = new URLSearchParams();
-              for (const [key, value] of Object.entries(builder.filters)) {
+              for (const [key, value] of Object.entries(builder._state.filters)) {
                 params.set(key, value);
               }
 
