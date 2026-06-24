@@ -49,7 +49,7 @@ export async function onRequest(context) {
       .single();
 
     if (userError || !user) {
-      return errorResponse('用户不存在', 404);
+      return errorResponse(`用户不存在: ${userError?.message || ''}`, 404);
     }
 
     const cost = 1; // 每张图片消耗 1 次
@@ -65,7 +65,7 @@ export async function onRequest(context) {
       .eq('id', userId);
 
     if (updateError) {
-      return errorResponse('扣除次数失败');
+      return errorResponse(`扣除次数失败: ${updateError.message || JSON.stringify(updateError)}`);
     }
 
     // 先插入记录，状态为 processing
@@ -79,9 +79,7 @@ export async function onRequest(context) {
         size: size || '1024x768',
         status: 'processing',
         cost,
-      })
-      .select()
-      .single();
+      });
 
     if (insertError) {
       // 回滚余额
@@ -89,8 +87,10 @@ export async function onRequest(context) {
         .from('users')
         .update({ balance: user.balance })
         .eq('id', userId);
-      return errorResponse('创建记录失败');
+      return errorResponse(`创建记录失败: ${insertError.message || JSON.stringify(insertError)}`);
     }
+
+    const record = imageRecord?.[0] || imageRecord;
 
     // 同步生成图片
     try {
@@ -112,13 +112,13 @@ export async function onRequest(context) {
             status: 'succeeded',
             image_url: result.imageUrl,
           })
-          .eq('id', imageRecord.id);
+          .eq('id', record.id);
 
         return jsonResponse({
           success: true,
           message: '生成成功',
           image: {
-            ...imageRecord,
+            ...record,
             status: 'succeeded',
             image_url: result.imageUrl,
           },
@@ -136,7 +136,7 @@ export async function onRequest(context) {
           status: 'failed',
           error_message: genError.message || '生成失败',
         })
-        .eq('id', imageRecord.id);
+        .eq('id', record.id);
 
       // 退还次数
       await supabase
