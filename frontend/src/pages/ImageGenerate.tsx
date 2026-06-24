@@ -2,16 +2,18 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { generateImage } from '../api';
-import { IMAGE_SIZES, IMAGE_STYLES } from '../types';
+import { IMAGE_SIZES, IMAGE_STYLES, IMAGE_MODES } from '../types';
 
 export default function ImageGenerate() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
+  const [mode, setMode] = useState('text2image');
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [style, setStyle] = useState('realistic');
   const [size, setSize] = useState('1024x768');
+  const [referenceImage, setReferenceImage] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -21,6 +23,12 @@ export default function ImageGenerate() {
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError('请输入图片描述');
+      return;
+    }
+
+    // 图生图模式需要参考图
+    if (mode === 'image2image' && !referenceImage.trim()) {
+      setError('请输入参考图片 URL');
       return;
     }
 
@@ -34,12 +42,19 @@ export default function ImageGenerate() {
     setGeneratedImage(null);
 
     try {
-      const res = await generateImage({
+      const params: any = {
         prompt: prompt.trim(),
         negativePrompt: negativePrompt.trim() || undefined,
         style,
         size,
-      });
+        mode,
+      };
+
+      if (mode === 'image2image') {
+        params.image = referenceImage.trim();
+      }
+
+      const res = await generateImage(params);
 
       if (res.data.success) {
         setGeneratedImage(res.data.image.image_url);
@@ -67,6 +82,48 @@ export default function ImageGenerate() {
 
       {/* 生成卡片 */}
       <div className="bg-[#121212] rounded-2xl p-6 md:p-8 border border-gray-800 animate-slide-up">
+        {/* 生成模式 */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-300 mb-3">
+            生成模式
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {IMAGE_MODES.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => setMode(m.value)}
+                className={`p-4 rounded-lg border text-left transition-all ${
+                  mode === m.value
+                    ? 'border-white bg-white/10'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
+              >
+                <div className="font-medium">{m.label}</div>
+                <div className="text-xs text-gray-400 mt-1">{m.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 图生图 - 参考图 */}
+        {mode === 'image2image' && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              参考图片 URL <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={referenceImage}
+              onChange={(e) => setReferenceImage(e.target.value)}
+              placeholder="输入参考图片的 URL 地址..."
+              className="w-full px-4 py-3 bg-[#1a1a1a] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-white transition-colors"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              💡 上传图片到任意图床，复制图片链接粘贴到这里
+            </p>
+          </div>
+        )}
+
         {/* 提示词输入 */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -75,7 +132,10 @@ export default function ImageGenerate() {
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="描述你想要生成的图片，例如：一只在海边散步的橘猫，夕阳下的剪影..."
+            placeholder={mode === 'text2image' 
+              ? '描述你想要生成的图片，例如：一只在海边散步的橘猫，夕阳下的剪影...'
+              : '描述想要如何修改图片，例如：把背景改成夜晚，增加星空效果...'
+            }
             className="w-full h-32 px-4 py-3 bg-[#1a1a1a] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-white transition-colors resize-none"
           />
         </div>

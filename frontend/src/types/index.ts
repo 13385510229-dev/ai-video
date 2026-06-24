@@ -71,6 +71,14 @@ export interface Stats {
   totalVideos: number;
 }
 
+// 视频生成模式
+export const VIDEO_MODES = [
+  { value: 'ti2vid', label: '文生视频', description: '用文字描述生成视频' },
+  { value: 'i2v', label: '图生视频', description: '上传一张图片，让它动起来' },
+  { value: 'multi-image', label: '多图视频', description: '上传多张图片生成连贯视频' },
+  { value: 'keyframes', label: '关键帧动画', description: '在多个关键帧之间平滑过渡' },
+];
+
 // 视频风格
 export const VIDEO_STYLES = [
   { value: 'realistic', label: '写实' },
@@ -102,6 +110,12 @@ export const IMAGE_SIZES = [
   { value: '1024x1024', label: '方形 1024×1024' },
   { value: '1280x720', label: '高清横屏 1280×720' },
   { value: '720x1280', label: '高清竖屏 720×1280' },
+];
+
+// 图片生成模式
+export const IMAGE_MODES = [
+  { value: 'text2image', label: '文生图', description: '用文字描述生成图片' },
+  { value: 'image2image', label: '图生图', description: '上传参考图，根据提示词修改' },
 ];
 
 // 图片风格

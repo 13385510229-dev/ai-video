@@ -157,6 +157,18 @@ export async function requireAuth(request, env) {
   return { user: result.payload, error: null };
 }
 
+// 管理员认证中间件（简单 API Key 方式，稳定可靠）
+export async function requireAdmin(request, env) {
+  const adminKey = request.headers.get('X-Admin-Key');
+  const adminPassword = env.ADMIN_PASSWORD || 'admin123';
+
+  if (!adminKey || adminKey !== adminPassword) {
+    return { valid: false, error: '未授权' };
+  }
+
+  return { valid: true };
+}
+
 // 生成随机验证码
 export function generateCode(length = 6) {
   let code = '';

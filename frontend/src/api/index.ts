@@ -36,9 +36,9 @@ const adminApi = axios.create({
 });
 
 adminApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('adminToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const adminKey = localStorage.getItem('adminToken');
+  if (adminKey) {
+    config.headers['X-Admin-Key'] = adminKey;
   }
   return config;
 });
@@ -75,6 +75,11 @@ export const generateVideo = (params: {
   style?: string;
   duration?: number;
   aspectRatio?: string;
+  mode?: string; // ti2vid: 文生视频, i2v: 图生视频, multi-image: 多图, keyframes: 关键帧
+  image?: string; // 单张参考图 URL
+  images?: string[]; // 多张参考图 URL 数组
+  seed?: number;
+  numInferenceSteps?: number;
 }) => {
   return api.post('/videos/generate', params);
 };
@@ -102,6 +107,8 @@ export const generateImage = (params: {
   negativePrompt?: string;
   style?: string;
   size?: string;
+  mode?: string; // text2image: 文生图, image2image: 图生图
+  image?: string; // 参考图 URL
 }) => {
   return api.post('/images/generate', params, {
     timeout: 120000, // 图片生成超时时间设为 2 分钟

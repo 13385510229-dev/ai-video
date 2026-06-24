@@ -20,7 +20,14 @@ export async function onRequestPost(context) {
     const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AGNES_API_KEY } = env;
 
     const body = await request.json();
-    const { prompt, negativePrompt, style, size } = body;
+    const {
+      prompt,
+      negativePrompt,
+      style,
+      size,
+      mode = 'text2image', // text2image: 文生图, image2image: 图生图
+      image = null, // 参考图 URL
+    } = body;
 
     if (!prompt || !prompt.trim()) {
       return errorResponse('请输入图片描述');
@@ -87,6 +94,8 @@ export async function onRequestPost(context) {
         size: size || '1024x768',
         style: style,
         apiKey: AGNES_API_KEY || '',
+        mode,
+        image,
       });
 
       if (result.success) {

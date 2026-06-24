@@ -27,7 +27,7 @@ const AdminLogin = () => {
     try {
       const res = await adminLogin(password);
       if (res.data.success) {
-        localStorage.setItem('adminToken', res.data.token);
+        localStorage.setItem('adminToken', password);
         navigate('/admin');
       } else {
         setError(res.data.message || '登录失败');

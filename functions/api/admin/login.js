@@ -1,4 +1,4 @@
-import { jsonResponse, errorResponse, handleOptions, signJWT, rateLimit } from '../_lib/auth.js';
+import { jsonResponse, errorResponse, handleOptions, rateLimit } from '../_lib/auth.js';
 
 export async function onRequestPost(context) {
   try {
@@ -27,20 +27,8 @@ export async function onRequestPost(context) {
       return errorResponse('密码错误', 401);
     }
 
-    // 生成管理员 token
-    const jwtSecret = env.JWT_SECRET || 'default-secret-change-me';
-    const token = await signJWT(
-      {
-        role: 'admin',
-        isAdmin: true,
-      },
-      jwtSecret,
-      { expiresIn: 60 * 60 * 24 } // 24 小时有效
-    );
-
     return jsonResponse({
       success: true,
-      token,
       message: '登录成功',
     });
   } catch (error) {

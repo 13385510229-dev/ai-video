@@ -64,6 +64,11 @@ export async function createVideoTask(params, env) {
     style = 'realistic',
     duration = 5,
     aspect_ratio = '16:9',
+    mode = 'ti2vid', // ti2vid: 文生视频, i2v: 图生视频, multi-image: 多图, keyframes: 关键帧
+    image = null, // 单张图生视频
+    images = null, // 多图/关键帧数组
+    seed = null,
+    num_inference_steps = null,
   } = params;
 
   const apiKey = env.AGNES_API_KEY;
@@ -86,8 +91,45 @@ export async function createVideoTask(params, env) {
   const stylePrefix = styleKeywords[style] || '';
   const fullPrompt = stylePrefix + prompt;
 
+  // 构建请求体
+  const requestBody = {
+    model: 'agnes-video-v2.0',
+    prompt: fullPrompt,
+    negative_prompt,
+    height,
+    width,
+    num_frames,
+    frame_rate,
+  };
+
+  // 根据模式设置不同参数
+  if (mode === 'i2v' && image) {
+    // 图生视频模式
+    requestBody.image = image;
+  } else if ((mode === 'multi-image' || mode === 'keyframes') && images && images.length > 0) {
+    // 多图/关键帧模式
+    requestBody.extra_body = {
+      image: images,
+    };
+    if (mode === 'keyframes') {
+      requestBody.extra_body.mode = 'keyframes';
+    }
+  } else {
+    // 文生视频模式（默认）
+    requestBody.mode = 'ti2vid';
+  }
+
+  // 可选参数
+  if (seed !== null) {
+    requestBody.seed = seed;
+  }
+  if (num_inference_steps !== null) {
+    requestBody.num_inference_steps = num_inference_steps;
+  }
+
   console.log('Agnes AI 参数:', {
     model: 'agnes-video-v2.0',
+    mode,
     prompt: fullPrompt,
     negative_prompt,
     num_frames,
@@ -95,6 +137,8 @@ export async function createVideoTask(params, env) {
     width,
     height,
     style,
+    hasImage: !!image,
+    imageCount: images?.length || 0,
   });
 
   // 重试 2 次
@@ -107,16 +151,7 @@ export async function createVideoTask(params, env) {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: 'agnes-video-v2.0',
-          prompt: fullPrompt,
-          negative_prompt,
-          mode: 'ti2vid',
-          height,
-          width,
-          num_frames,
-          frame_rate,
-        }),
+        body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(60000), // 60 秒超时
       });
 

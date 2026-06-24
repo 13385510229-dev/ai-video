@@ -11,10 +11,12 @@ export async function generateImage({
   size = '1024x768',
   style = '',
   apiKey = '',
+  mode = 'text2image', // text2image: 文生图, image2image: 图生图
+  image = null, // 图生图的参考图 URL
 }) {
   // 没有 API Key 时使用模拟模式
   if (!apiKey) {
-    return mockGenerateImage({ prompt, size });
+    return mockGenerateImage({ prompt, size, mode, image });
   }
 
   // 风格关键词
@@ -34,6 +36,21 @@ export async function generateImage({
     fullPrompt += `, negative: ${negativePrompt}`;
   }
 
+  // 构建请求体
+  const requestBody = {
+    model: MODEL_NAME,
+    prompt: fullPrompt,
+    size,
+    extra_body: {
+      response_format: 'url',
+    },
+  };
+
+  // 图生图模式
+  if (mode === 'image2image' && image) {
+    requestBody.extra_body.image = [image];
+  }
+
   try {
     const response = await fetch(`${AGNES_API_BASE}/images/generations`, {
       method: 'POST',
@@ -41,14 +58,7 @@ export async function generateImage({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        prompt: fullPrompt,
-        size,
-        extra_body: {
-          response_format: 'url',
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -74,7 +84,7 @@ export async function generateImage({
 }
 
 // 模拟生成图片（测试用）
-function mockGenerateImage({ prompt, size }) {
+function mockGenerateImage({ prompt, size, mode = 'text2image', image = null }) {
   return new Promise((resolve) => {
     setTimeout(() => {
       // 使用占位图
@@ -86,6 +96,8 @@ function mockGenerateImage({ prompt, size }) {
         imageUrl,
         revisedPrompt: prompt,
         mock: true,
+        mode,
+        referenceImage: image,
       });
     }, 2000); // 模拟2秒生成时间
   });

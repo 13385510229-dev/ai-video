@@ -23,6 +23,11 @@ export async function onRequestPost(context) {
       style = 'realistic',
       duration = 5,
       aspectRatio = '16:9',
+      mode = 'ti2vid', // ti2vid: 文生视频, i2v: 图生视频, multi-image: 多图, keyframes: 关键帧
+      image = null, // 单张参考图 URL
+      images = null, // 多张参考图 URL 数组
+      seed = null,
+      numInferenceSteps = null,
     } = body;
 
     if (!prompt || !prompt.trim()) {
@@ -57,6 +62,11 @@ export async function onRequestPost(context) {
         style,
         duration,
         aspect_ratio: aspectRatio,
+        mode,
+        image,
+        images,
+        seed,
+        num_inference_steps: numInferenceSteps,
       },
       env
     );

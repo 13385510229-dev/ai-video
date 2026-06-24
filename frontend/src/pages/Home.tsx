@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { generateVideo } from '../api';
-import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS } from '../types';
+import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS, VIDEO_MODES } from '../types';
 
 const Home = () => {
   const navigate = useNavigate();
   const { user, setUser } = useAuthStore();
+  const [mode, setMode] = useState('ti2vid');
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [style, setStyle] = useState('realistic');
   const [duration, setDuration] = useState(5);
   const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState(['', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,6 +23,18 @@ const Home = () => {
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError('请输入视频描述');
+      return;
+    }
+
+    // 图生视频模式需要图片
+    if (mode === 'i2v' && !imageUrl.trim()) {
+      setError('请输入参考图片 URL');
+      return;
+    }
+
+    // 多图/关键帧模式需要至少一张图
+    if ((mode === 'multi-image' || mode === 'keyframes') && imageUrls.filter(u => u.trim()).length === 0) {
+      setError('请至少输入一张参考图片 URL');
       return;
     }
 
@@ -32,13 +47,22 @@ const Home = () => {
     setError('');
 
     try {
-      const res = await generateVideo({
+      const params: any = {
         prompt,
         negativePrompt,
         style,
         duration,
         aspectRatio,
-      });
+        mode,
+      };
+
+      if (mode === 'i2v') {
+        params.image = imageUrl.trim();
+      } else if (mode === 'multi-image' || mode === 'keyframes') {
+        params.images = imageUrls.filter(u => u.trim());
+      }
+
+      const res = await generateVideo(params);
 
       if (res.data.success) {
         // 更新本地余额
@@ -69,6 +93,81 @@ const Home = () => {
       </div>
 
       <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
+        {/* 生成模式 */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-3">
+            生成模式
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {VIDEO_MODES.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => setMode(m.value)}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  mode === m.value
+                    ? 'border-white bg-white/10'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
+              >
+                <div className="font-medium text-sm">{m.label}</div>
+                <div className="text-xs text-gray-400 mt-1">{m.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 图生视频 - 单图 */}
+        {mode === 'i2v' && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">
+              参考图片 URL <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="输入参考图片的 URL 地址..."
+              className="w-full"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              💡 上传图片到任意图床，复制图片链接粘贴到这里
+            </p>
+          </div>
+        )}
+
+        {/* 多图/关键帧 - 多图 */}
+        {(mode === 'multi-image' || mode === 'keyframes') && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">
+              参考图片 URL <span className="text-red-500">*</span>
+            </label>
+            {imageUrls.map((url, index) => (
+              <div key={index} className="mb-2">
+                <input
+                  type="text"
+                  value={url}
+                  onChange={(e) => {
+                    const newUrls = [...imageUrls];
+                    newUrls[index] = e.target.value;
+                    setImageUrls(newUrls);
+                  }}
+                  placeholder={`图片 ${index + 1} URL...`}
+                  className="w-full"
+                />
+              </div>
+            ))}
+            <button
+              onClick={() => setImageUrls([...imageUrls, ''])}
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              + 添加更多图片
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              💡 {mode === 'keyframes' ? '关键帧模式：按顺序排列，第一张为起始帧，最后一张为结束帧' : '多图模式：上传多张参考图片引导视频生成'}
+            </p>
+          </div>
+        )}
+
         {/* 视频描述 */}
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2">
@@ -77,7 +176,10 @@ const Home = () => {
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="描述你想要生成的视频内容，越详细效果越好..."
+            placeholder={mode === 'ti2vid' 
+              ? '描述你想要生成的视频内容，越详细效果越好...'
+              : '描述画面的运动和变化，保持主体稳定...'
+            }
             rows={4}
             className="w-full resize-none"
           />

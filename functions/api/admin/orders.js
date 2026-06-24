@@ -1,25 +1,5 @@
-import { jsonResponse, errorResponse, handleOptions, verifyJWT, extractToken } from '../_lib/auth.js';
+import { jsonResponse, errorResponse, handleOptions, requireAdmin } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
-
-async function requireAdmin(request, env) {
-  const token = extractToken(request);
-  if (!token) {
-    return { valid: false, error: 'No token provided' };
-  }
-
-  const secret = env.JWT_SECRET || 'default-secret-change-me';
-  const result = await verifyJWT(token, secret);
-
-  if (!result.valid) {
-    return { valid: false, error: result.error || 'Invalid token' };
-  }
-
-  if (!result.payload?.isAdmin && result.payload?.role !== 'admin') {
-    return { valid: false, error: 'Not admin' };
-  }
-
-  return { valid: true, payload: result.payload };
-}
 
 export async function onRequestGet(context) {
   try {
