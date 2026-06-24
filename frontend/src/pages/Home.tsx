@@ -116,7 +116,9 @@ const Home = () => {
         setError(res.data.message || '生成失败');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || '生成失败，请稍后重试');
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || '生成失败，请稍后重试';
+      console.error('视频生成错误:', err.response?.data || err);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
