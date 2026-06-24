@@ -3,20 +3,13 @@ import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib
 
 export const onRequestOptions = handleOptions;
 
-export const onRequestPost = async (context) => {
-  const { env, request } = context;
-
-  // 认证
-  const auth = await requireAuth(request, env);
-  if (auth.error) {
-    return errorResponse(auth.error, 401);
-  }
-  const user = auth.user;
-  const userId = user.sub;
-
+export const onRequestPost = requireAuth(async (context) => {
   try {
+    const { env, data } = context;
+    const userId = data.userId;
+
     // 读取请求体
-    const body = await request.json();
+    const body = await context.request.json();
     const { image: base64Image, filename } = body;
 
     if (!base64Image) {
@@ -28,7 +21,7 @@ export const onRequestPost = async (context) => {
     const mimeType = base64Image.includes('image/png') ? 'image/png' : 'image/jpeg';
     const ext = mimeType === 'image/png' ? 'png' : 'jpg';
 
-    // 生成文件名（简化，不用子目录，避免路径问题）
+    // 生成文件名
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     const finalFilename = filename || `img_${userId}_${timestamp}_${random}.${ext}`;
@@ -42,34 +35,26 @@ export const onRequestPost = async (context) => {
 
     // 上传到 Supabase Storage
     const bucketName = 'reference-images';
-    const uploadUrl = `${env.SUPABASE_URL}/storage/v1/object/${bucketName}/${finalFilename}`;
+    const uploadPath = `${bucketName}/${finalFilename}`;
+    const uploadUrl = `${env.SUPABASE_URL}/storage/v1/object/${uploadPath}`;
 
     const uploadRes = await fetch(uploadUrl, {
-      method: 'POST',
+      method: 'PUT',
       headers: {
         'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
         'Content-Type': mimeType,
-        'x-upsert': 'true',
       },
       body: bytes,
     });
 
     if (!uploadRes.ok) {
-      const errText = await uploadRes.text().catch(() => '');
-      console.error('上传图片失败:', uploadRes.status, errText);
-      let errMsg = '';
-      try {
-        const errJson = JSON.parse(errText);
-        errMsg = errJson.message || errJson.error || JSON.stringify(errJson);
-      } catch {
-        errMsg = errText;
-      }
-      return errorResponse(`上传失败 (${uploadRes.status}): ${errMsg}`);
+      const errText = await uploadRes.text();
+      return errorResponse(`Supabase上传失败 (${uploadRes.status}): ${errText}`);
     }
 
     // 构建公开 URL
-    const publicUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${finalFilename}`;
+    const publicUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${uploadPath}`;
 
     return jsonResponse({
       success: true,
@@ -78,7 +63,6 @@ export const onRequestPost = async (context) => {
     });
 
   } catch (error) {
-    console.error('上传图片错误:', error);
-    return errorResponse(`上传失败: ${error.message}`, 500);
+    return errorResponse(`服务器错误: ${error.message}`);
   }
-};
+});

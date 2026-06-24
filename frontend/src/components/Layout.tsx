@@ -22,9 +22,9 @@ const Layout = () => {
   };
 
   const navItems = [
-    { path: '/', label: '视频生成' },
+    { path: '/video', label: '视频生成' },
     { path: '/history', label: '视频历史' },
-    { path: '/image-generate', label: '图片生成' },
+    { path: '/image', label: '图片生成' },
     { path: '/image-history', label: '图片历史' },
     { path: '/recharge', label: '充值' },
     { path: '/profile', label: '个人中心' },
@@ -56,7 +56,7 @@ const Layout = () => {
                   }`}
                 >
                   {item.label}
-                  <span className={`absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-pink-400 to-pink-600 transition-all duration-300 ${
+                  <span className={`absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-blue-400 to-purple-500 transition-all duration-300 ${
                     location.pathname === item.path ? 'w-full' : 'w-0 group-hover:w-full'
                   }`}></span>
                 </Link>

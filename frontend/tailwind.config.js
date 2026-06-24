@@ -13,9 +13,9 @@ export default {
         'netflix-light-gray': '#333333',
         'netflix-text': '#ffffff',
         'netflix-subtext': '#888888',
-        'accent-pink': '#ff6b9d',
-        'accent-pink-dark': '#c44569',
-        'accent-purple': '#a855f7',
+        'accent-blue': '#6464ff',
+        'accent-purple': '#7c3aed',
+        'accent-indigo': '#4f46e5',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out',
@@ -47,8 +47,8 @@ export default {
           '50%': { opacity: '0.6' },
         },
         glow: {
-          '0%': { boxShadow: '0 0 5px rgba(255, 107, 157, 0.3)' },
-          '100%': { boxShadow: '0 0 20px rgba(255, 107, 157, 0.6)' },
+          '0%': { boxShadow: '0 0 5px rgba(100, 100, 255, 0.3)' },
+          '100%': { boxShadow: '0 0 20px rgba(100, 100, 255, 0.6)' },
         },
         underlineSlide: {
           '0%': { width: '0%' },

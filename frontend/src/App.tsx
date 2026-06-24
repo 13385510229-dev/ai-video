@@ -6,6 +6,7 @@ import { useAuthStore } from './store/auth';
 
 // 页面
 import Home from './pages/Home';
+import VideoGenerate from './pages/VideoGenerate';
 import Login from './pages/Login';
 import History from './pages/History';
 import ImageGenerate from './pages/ImageGenerate';
@@ -52,12 +53,15 @@ function App() {
 
   return (
     <Routes>
-      {/* 前台路由 */}
+      {/* 全屏首页（粒子导航） */}
+      <Route path="/" element={<Home />} />
+
+      {/* 前台路由（带导航栏） */}
       <Route path="/" element={<Layout />}>
-        <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
         <Route path="login" element={<Login />} />
+        <Route path="video" element={<ProtectedRoute><VideoGenerate /></ProtectedRoute>} />
         <Route path="history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-        <Route path="image-generate" element={<ProtectedRoute><ImageGenerate /></ProtectedRoute>} />
+        <Route path="image" element={<ProtectedRoute><ImageGenerate /></ProtectedRoute>} />
         <Route path="image-history" element={<ProtectedRoute><ImageHistory /></ProtectedRoute>} />
         <Route path="recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
         <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

@@ -1,448 +1,161 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ParticleBackground from '../components/ParticleBackground';
 import { useAuthStore } from '../store/auth';
-import { generateVideo, uploadImage } from '../api';
-import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS, VIDEO_MODES } from '../types';
+
+const navItems = [
+  { id: 'video', label: '视频生成', icon: '🎬', path: '/video' },
+  { id: 'image', label: '图片生成', icon: '🖼️', path: '/image' },
+  { id: 'history', label: '创作历史', icon: '📜', path: '/history' },
+  { id: 'profile', label: '个人中心', icon: '👤', path: '/profile' },
+];
 
 const Home = () => {
   const navigate = useNavigate();
-  const { user, deductCredits } = useAuthStore();
-  const [mode, setMode] = useState('ti2vid');
-  const [prompt, setPrompt] = useState('');
-  const [negativePrompt, setNegativePrompt] = useState('');
-  const [style, setStyle] = useState('realistic');
-  const [duration, setDuration] = useState(5);
-  const [aspectRatio, setAspectRatio] = useState('16:9');
-  const [singleFile, setSingleFile] = useState<File | null>(null);
-  const [singleImageBase64, setSingleImageBase64] = useState('');
-  const [singleImageUrl, setSingleImageUrl] = useState('');
-  const [multipleFiles, setMultipleFiles] = useState<File[]>([null as any, null as any]);
-  const [multipleImageBase64s, setMultipleImageBase64s] = useState<string[]>(['', '']);
-  const [multipleImageUrls, setMultipleImageUrls] = useState<string[]>(['', '']);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
+  const { user } = useAuthStore();
+  const [rotation, setRotation] = useState(0);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const currentCost = VIDEO_DURATIONS.find(d => d.value === duration)?.cost || 1;
+  // 自动旋转
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRotation((prev) => prev + 0.3);
+    }, 50);
+    return () => clearInterval(interval);
+  }, []);
 
-  // 压缩图片并转 Base64
-  const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.8): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target?.result as string;
-        img.onload = () => {
-          // 计算压缩后的尺寸
-          let width = img.width;
-          let height = img.height;
-
-          if (width > maxWidth) {
-            height = (maxWidth / width) * height;
-            width = maxWidth;
-          }
-          if (height > maxHeight) {
-            width = (maxHeight / height) * width;
-            height = maxHeight;
-          }
-
-          // 用 canvas 压缩
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          // 转成 JPEG 格式的 Base64
-          const compressed = canvas.toDataURL('image/jpeg', quality);
-          resolve(compressed);
-        };
-        img.onerror = reject;
-      };
-      reader.onerror = reject;
-    });
-  };
-
-  // 处理单图选择
-  const handleSingleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSingleFile(file);
-      setError('');
-      setUploading(true);
-      try {
-        const base64 = await compressImage(file);
-        setSingleImageBase64(base64);
-        // 上传到服务器获取 URL
-        const res = await uploadImage(base64);
-        if (res.data.success) {
-          setSingleImageUrl(res.data.url);
-        } else {
-          setError(res.data.message || '图片上传失败');
-        }
-      } catch (err: any) {
-        const errMsg = err.response?.data?.error || err.message || '未知错误';
-        setError('图片上传失败: ' + errMsg);
-        console.error('图片上传错误:', err.response?.data || err);
-      } finally {
-        setUploading(false);
-      }
-    }
-  };
-
-  // 处理多图选择
-  const handleMultipleFileChange = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const newFiles = [...multipleFiles];
-      newFiles[index] = file;
-      setMultipleFiles(newFiles);
-      setError('');
-      setUploading(true);
-      try {
-        const base64 = await compressImage(file);
-        const newBase64s = [...multipleImageBase64s];
-        newBase64s[index] = base64;
-        setMultipleImageBase64s(newBase64s);
-        // 上传到服务器获取 URL
-        const res = await uploadImage(base64);
-        if (res.data.success) {
-          const newUrls = [...multipleImageUrls];
-          newUrls[index] = res.data.url;
-          setMultipleImageUrls(newUrls);
-        } else {
-          setError(res.data.message || '图片上传失败');
-        }
-      } catch (err: any) {
-        const errMsg = err.response?.data?.error || err.message || '未知错误';
-        setError('图片上传失败: ' + errMsg);
-        console.error('图片上传错误:', err.response?.data || err);
-      } finally {
-        setUploading(false);
-      }
-    }
-  };
-
-  // 添加更多图片
-  const addMoreImages = () => {
-    setMultipleFiles([...multipleFiles, null as any]);
-    setMultipleImageBase64s([...multipleImageBase64s, '']);
-  };
-
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      setError('请输入视频描述');
-      return;
-    }
-
-    // 图生视频模式需要图片
-    if (mode === 'i2v' && !singleImageUrl) {
-      setError(uploading ? '图片上传中，请稍候...' : '请选择参考图片');
-      return;
-    }
-
-    // 多图/关键帧模式需要至少一张图
-    if ((mode === 'multi-image' || mode === 'keyframes') && multipleImageUrls.filter(u => u).length === 0) {
-      setError(uploading ? '图片上传中，请稍候...' : '请至少选择一张参考图片');
-      return;
-    }
-
-    if ((user?.balance || 0) < currentCost) {
-      setError('次数不足，请先充值');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const params: any = {
-        prompt,
-        negativePrompt,
-        style,
-        duration,
-        aspectRatio,
-        mode,
-      };
-
-      if (mode === 'i2v') {
-        params.image = singleImageUrl;
-      } else if (mode === 'multi-image' || mode === 'keyframes') {
-        params.images = multipleImageUrls.filter(u => u);
-      }
-
-      const res = await generateVideo(params);
-
-      if (res.data.success) {
-        // 扣除本地余额，立马看到效果
-        deductCredits(currentCost);
-        // 跳转到历史记录
-        navigate('/history');
-      } else {
-        setError(res.data.message || '生成失败');
-      }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || '生成失败，请稍后重试';
-      console.error('视频生成错误:', err.response?.data || err);
-      setError(errorMsg);
-    } finally {
-      setLoading(false);
-    }
+  const handleNavClick = (path: string) => {
+    navigate(path);
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12 animate-fade-in">
-      <div className="text-center mb-12 animate-slide-up">
-        <h1 className="text-5xl font-bold mb-4 tracking-tight bg-gradient-to-r from-pink-400 via-pink-500 to-purple-500 bg-clip-text text-transparent">
-          AI 视频生成
-        </h1>
-        <p className="text-gray-400 text-lg">
-          输入文字描述，一键生成专业级视频
-        </p>
-      </div>
+    <div className="relative min-h-screen overflow-hidden">
+      <ParticleBackground />
 
-      <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
-        {/* 生成模式 */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-3">
-            生成模式
-          </label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {VIDEO_MODES.map((m) => (
-              <button
-                key={m.value}
-                onClick={() => setMode(m.value)}
-                className={`p-3 rounded-lg border text-left transition-all duration-300 ${
-                  mode === m.value
-                    ? 'border-pink-400 bg-pink-500/10 shadow-lg shadow-pink-500/20'
-                    : 'border-gray-700 hover:border-gray-500 hover:bg-gray-800/50'
-                }`}
-              >
-                <div className="font-medium text-sm">{m.label}</div>
-                <div className="text-xs text-gray-400 mt-1">{m.description}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 图生视频 - 单图 */}
-        {mode === 'i2v' && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">
-              参考图片 <span className="text-red-500">*</span>
-            </label>
-            <div className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-gray-500 transition-colors">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleSingleFileChange}
-                className="hidden"
-                id="single-image-upload"
-              />
-              <label htmlFor="single-image-upload" className="cursor-pointer">
-                {singleFile ? (
-                  <div>
-                    <p className="text-white font-medium">{singleFile.name}</p>
-                    <p className="text-xs text-gray-400 mt-1">点击重新选择</p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-gray-400">点击选择图片，或拖拽到这里</p>
-                    <p className="text-xs text-gray-500 mt-1">支持 JPG、PNG、WebP 等格式</p>
-                  </div>
-                )}
-              </label>
-            </div>
-            {singleImageBase64 && (
-              <div className="mt-3">
-                <img
-                  src={singleImageBase64}
-                  alt="预览"
-                  className="max-h-48 mx-auto rounded-lg"
-                />
-              </div>
-            )}
-            <p className="text-xs text-gray-500 mt-3">
-              💡 建议图片大小不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器，每次生成都需重新上传。
+      {/* 主内容 */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6">
+        {/* 标题 */}
+        <div className="text-center mb-16 animate-fade-in">
+          <h1 className="text-6xl md:text-7xl font-bold mb-6 tracking-tight">
+            <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent">
+              AI 创意工坊
+            </span>
+          </h1>
+          <p className="text-gray-400 text-xl max-w-2xl mx-auto">
+            用 AI 释放你的创造力，一键生成专业级视频与图片
+          </p>
+          {user && (
+            <p className="text-gray-500 mt-4 text-sm">
+              剩余次数：<span className="text-blue-400 font-semibold">{user.balance}</span> 次
             </p>
-          </div>
-        )}
-
-        {/* 多图/关键帧 - 多图 */}
-        {(mode === 'multi-image' || mode === 'keyframes') && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">
-              参考图片 <span className="text-red-500">*</span>
-            </label>
-            <div className="space-y-3">
-              {multipleFiles.map((file, index) => (
-                <div key={index} className="border-2 border-dashed border-gray-700 rounded-lg p-4 hover:border-gray-500 transition-colors">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleMultipleFileChange(index, e)}
-                    className="hidden"
-                    id={`multi-image-upload-${index}`}
-                  />
-                  <label htmlFor={`multi-image-upload-${index}`} className="cursor-pointer block">
-                    {file ? (
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={multipleImageBase64s[index]}
-                          alt={`图片 ${index + 1}`}
-                          className="w-16 h-16 object-cover rounded"
-                        />
-                        <div>
-                          <p className="text-white font-medium text-sm">{file.name}</p>
-                          <p className="text-xs text-gray-400">点击重新选择</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-2">
-                        <p className="text-gray-400 text-sm">图片 {index + 1}：点击选择</p>
-                      </div>
-                    )}
-                  </label>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={addMoreImages}
-              className="mt-3 text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              + 添加更多图片
-            </button>
-            <p className="text-xs text-gray-500 mt-2">
-              💡 {mode === 'keyframes' ? '关键帧模式：按顺序排列，第一张为起始帧，最后一张为结束帧' : '多图模式：上传多张参考图片引导视频生成'}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              ⚠️ 建议单张图片不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器。
-            </p>
-          </div>
-        )}
-
-        {/* 视频描述 */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">
-            视频描述 <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder={mode === 'ti2vid' 
-              ? '描述你想要生成的视频内容，越详细效果越好...'
-              : '描述画面的运动和变化，保持主体稳定...'
-            }
-            rows={4}
-            className="w-full resize-none"
-          />
+          )}
         </div>
 
-        {/* 负面提示词 */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">
-            负面提示词（可选）
-          </label>
-          <textarea
-            value={negativePrompt}
-            onChange={(e) => setNegativePrompt(e.target.value)}
-            placeholder="描述你不想要出现在视频中的内容..."
-            rows={2}
-            className="w-full resize-none"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {/* 风格 */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              视频风格
-            </label>
-            <select
-              value={style}
-              onChange={(e) => setStyle(e.target.value)}
-              className="w-full"
-            >
-              {VIDEO_STYLES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 时长 */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              视频时长
-            </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full"
-            >
-              {VIDEO_DURATIONS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}（{d.cost} 次）
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 比例 */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              画面比例
-            </label>
-            <select
-              value={aspectRatio}
-              onChange={(e) => setAspectRatio(e.target.value)}
-              className="w-full"
-            >
-              {ASPECT_RATIOS.map((a) => (
-                <option key={a.value} value={a.value}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
-            {error}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-400">
-            本次消耗 <span className="text-white font-medium">{currentCost}</span> 次
-            <span className="mx-2">·</span>
-            剩余 <span className="text-white font-medium">{user?.balance || 0}</span> 次
-          </div>
-          <button
-            onClick={handleGenerate}
-            disabled={loading || !prompt.trim()}
-            className="btn btn-primary flex items-center gap-2"
+        {/* 3D 圆环导航 */}
+        <div
+          className="relative w-96 h-96 md:w-[500px] md:h-[500px]"
+          style={{ perspective: '1000px' }}
+        >
+          <div
+            className="relative w-full h-full"
+            style={{
+              transformStyle: 'preserve-3d',
+              transform: `rotateX(60deg) rotateZ(${rotation}deg)`,
+              transition: 'transform 0.1s linear',
+            }}
           >
-            {loading ? (
-              <>
-                <div className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
-                生成中...
-              </>
-            ) : (
-              '开始生成'
-            )}
-          </button>
+            {navItems.map((item, index) => {
+              const angle = (index / navItems.length) * Math.PI * 2;
+              const radius = 180;
+              const x = Math.cos(angle) * radius;
+              const z = Math.sin(angle) * radius;
+              const isHovered = hoveredId === item.id;
+
+              return (
+                <div
+                  key={item.id}
+                  className="absolute left-1/2 top-1/2 cursor-pointer"
+                  style={{
+                    transform: `translate(-50%, -50%) translate3d(${x}px, 0, ${z}px) rotateX(-60deg) rotateZ(${-rotation}deg)`,
+                    transformStyle: 'preserve-3d',
+                  }}
+                  onMouseEnter={() => setHoveredId(item.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  onClick={() => handleNavClick(item.path)}
+                >
+                  {/* 玻璃小球 */}
+                  <div
+                    className={`relative w-24 h-24 md:w-28 md:h-28 rounded-full flex flex-col items-center justify-center transition-all duration-300 ${
+                      isHovered ? 'scale-125' : 'scale-100'
+                    }`}
+                    style={{
+                      background: isHovered
+                        ? 'radial-gradient(circle at 30% 30%, rgba(150, 180, 255, 0.4), rgba(80, 100, 200, 0.2), rgba(50, 50, 100, 0.3))'
+                        : 'radial-gradient(circle at 30% 30%, rgba(200, 220, 255, 0.2), rgba(100, 120, 200, 0.1), rgba(30, 30, 60, 0.2))',
+                      backdropFilter: 'blur(10px)',
+                      border: isHovered
+                        ? '1px solid rgba(150, 180, 255, 0.6)'
+                        : '1px solid rgba(150, 180, 255, 0.2)',
+                      boxShadow: isHovered
+                        ? '0 0 40px rgba(100, 120, 255, 0.5), inset 0 0 30px rgba(150, 180, 255, 0.2)'
+                        : '0 0 20px rgba(100, 120, 255, 0.2), inset 0 0 20px rgba(150, 180, 255, 0.1)',
+                    }}
+                  >
+                    {/* 高光 */}
+                    <div
+                      className="absolute top-2 left-4 w-8 h-4 rounded-full"
+                      style={{
+                        background: 'radial-gradient(ellipse, rgba(255, 255, 255, 0.4), transparent)',
+                      }}
+                    />
+                    <span className="text-3xl mb-1">{item.icon}</span>
+                    <span
+                      className={`text-xs font-medium transition-all duration-300 ${
+                        isHovered ? 'text-blue-200' : 'text-gray-300'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+
+                  {/* 悬停时的光晕 */}
+                  {isHovered && (
+                    <div
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        background: 'radial-gradient(circle, rgba(100, 120, 255, 0.3), transparent 70%)',
+                        transform: 'scale(2)',
+                        animation: 'pulse-glow 1.5s ease-in-out infinite',
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+
+            {/* 圆环轨道 */}
+            <div
+              className="absolute left-1/2 top-1/2 w-[360px] h-[360px] md:w-[400px] md:h-[400px] rounded-full -translate-x-1/2 -translate-y-1/2"
+              style={{
+                border: '1px solid rgba(100, 120, 255, 0.15)',
+                boxShadow: '0 0 30px rgba(100, 120, 255, 0.1), inset 0 0 30px rgba(100, 120, 255, 0.05)',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* 底部提示 */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-gray-500 text-sm animate-pulse">
+          移动鼠标与粒子互动 · 点击小球进入功能
         </div>
       </div>
 
-      {/* 提示信息 */}
-      <div className="mt-8 text-center text-sm text-gray-500 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-        <p>💡 提示：视频生成大约需要 5~10 分钟，请耐心等待</p>
-        <p className="mt-1">生成过程中可以关闭页面，稍后在历史记录中查看结果</p>
-      </div>
+      <style>{`
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.5; transform: scale(1.8); }
+          50% { opacity: 0.8; transform: scale(2.2); }
+        }
+      `}</style>
     </div>
   );
 };
