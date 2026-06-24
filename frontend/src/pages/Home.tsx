@@ -82,7 +82,9 @@ const Home = () => {
           setError(res.data.message || '图片上传失败');
         }
       } catch (err: any) {
-        setError('图片上传失败: ' + (err.message || '未知错误'));
+        const errMsg = err.response?.data?.error || err.message || '未知错误';
+        setError('图片上传失败: ' + errMsg);
+        console.error('图片上传错误:', err.response?.data || err);
       } finally {
         setUploading(false);
       }
@@ -113,7 +115,9 @@ const Home = () => {
           setError(res.data.message || '图片上传失败');
         }
       } catch (err: any) {
-        setError('图片上传失败: ' + (err.message || '未知错误'));
+        const errMsg = err.response?.data?.error || err.message || '未知错误';
+        setError('图片上传失败: ' + errMsg);
+        console.error('图片上传错误:', err.response?.data || err);
       } finally {
         setUploading(false);
       }
