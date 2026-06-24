@@ -56,7 +56,7 @@ const Layout = () => {
                   }`}
                 >
                   {item.label}
-                  <span className={`absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-blue-400 to-purple-500 transition-all duration-300 ${
+                  <span className={`absolute -bottom-1 left-0 h-0.5 bg-white transition-all duration-300 ${
                     location.pathname === item.path ? 'w-full' : 'w-0 group-hover:w-full'
                   }`}></span>
                 </Link>

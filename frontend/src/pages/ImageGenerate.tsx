@@ -165,7 +165,7 @@ export default function ImageGenerate() {
                 onClick={() => setMode(m.value)}
                 className={`p-4 rounded-lg border text-left transition-all duration-300 ${
                   mode === m.value
-                    ? 'border-pink-400 bg-pink-500/10 shadow-lg shadow-pink-500/20'
+                    ? 'border-white/50 bg-white/5 shadow-lg shadow-white/10'
                     : 'border-gray-700 hover:border-gray-500 hover:bg-gray-800/50'
                 }`}
               >
