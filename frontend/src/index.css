@@ -13,6 +13,22 @@ body {
   background-color: #000000;
   color: #ffffff;
   min-height: 100vh;
+  position: relative;
+}
+
+/* 四边粉色渐变光晕 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: 
+    linear-gradient(to bottom, rgba(255, 107, 157, 0.15), transparent 25%),
+    linear-gradient(to top, rgba(255, 107, 157, 0.15), transparent 25%),
+    linear-gradient(to right, rgba(255, 107, 157, 0.15), transparent 25%),
+    linear-gradient(to left, rgba(255, 107, 157, 0.15), transparent 25%);
+  box-shadow: inset 0 0 150px rgba(255, 107, 157, 0.1);
 }
 
 /* 自定义滚动条 */
