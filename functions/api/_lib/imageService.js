@@ -32,9 +32,6 @@ export async function generateImage({
   if (style && styleKeywords[style]) {
     fullPrompt = styleKeywords[style] + prompt;
   }
-  if (negativePrompt) {
-    fullPrompt += `, negative: ${negativePrompt}`;
-  }
 
   // 构建请求体
   const requestBody = {
@@ -45,6 +42,11 @@ export async function generateImage({
       response_format: 'url',
     },
   };
+
+  // 负面提示词
+  if (negativePrompt) {
+    requestBody.negative_prompt = negativePrompt;
+  }
 
   // 图生图模式
   if (mode === 'image2image' && image) {
@@ -59,6 +61,7 @@ export async function generateImage({
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(120000), // 2 分钟超时
     });
 
     if (!response.ok) {
@@ -73,13 +76,22 @@ export async function generateImage({
         success: true,
         imageUrl: data.data[0].url,
         revisedPrompt: data.data[0].revised_prompt || null,
+        mode: 'agnes',
       };
     } else {
       throw new Error('返回数据格式不正确');
     }
   } catch (error) {
     console.error('Agnes Image API 错误:', error);
-    throw error;
+    // 降级到模拟模式
+    console.log('Agnes Image API 失败，降级到模拟模式');
+    const mockResult = await mockGenerateImage({ prompt, size, mode, image });
+    return {
+      ...mockResult,
+      success: true,
+      mode: 'simulation-fallback',
+      error: error.message,
+    };
   }
 }
 

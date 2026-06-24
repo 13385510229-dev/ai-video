@@ -6,6 +6,7 @@ const History = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
 
   const fetchVideos = async () => {
     try {
@@ -35,16 +36,21 @@ const History = () => {
   }, [videos]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这个视频吗？')) {
+    if (!confirm('确定要删除这个视频吗？删除后无法恢复。')) {
       return;
     }
 
     setDeletingId(id);
+    setError('');
     try {
-      await deleteVideo(id);
-      setVideos(videos.filter(v => v.id !== id));
-    } catch (err) {
-      console.error('Failed to delete video:', err);
+      const res = await deleteVideo(id);
+      if (res.data.success) {
+        setVideos(videos.filter(v => v.id !== id));
+      } else {
+        setError(res.data.message || '删除失败');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || '删除失败，请稍后重试');
     } finally {
       setDeletingId(null);
     }
@@ -100,6 +106,12 @@ const History = () => {
         <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-pink-400 to-purple-500 bg-clip-text text-transparent">历史记录</h1>
         <p className="text-gray-400">共 {videos.length} 个视频</p>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm animate-shake">
+          {error}
+        </div>
+      )}
 
       {videos.length === 0 ? (
         <div className="card text-center py-16">

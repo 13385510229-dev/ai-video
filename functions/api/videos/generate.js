@@ -71,6 +71,11 @@ export async function onRequestPost(context) {
       env
     );
 
+    // 如果 Agnes API 调用失败且降级到模拟模式，记录错误
+    if (taskResult.mode === 'simulation-fallback') {
+      console.warn('Agnes API 调用失败，已降级到模拟模式:', taskResult.error);
+    }
+
     // 扣除余额
     const { error: updateError } = await supabase
       .from('users')
