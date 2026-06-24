@@ -33,24 +33,21 @@ export async function generateImage({
     fullPrompt = styleKeywords[style] + prompt;
   }
 
-  // 构建请求体
+  // 构建请求体（基础参数）
   const requestBody = {
     model: MODEL_NAME,
     prompt: fullPrompt,
     size,
-    extra_body: {
-      response_format: 'url',
-    },
   };
 
-  // 负面提示词
+  // 负面提示词（拼到 prompt 后面，避免参数不支持的问题）
   if (negativePrompt) {
-    requestBody.negative_prompt = negativePrompt;
+    requestBody.prompt = `${fullPrompt}。负面提示词：不要${negativePrompt}`;
   }
 
   // 图生图模式
   if (mode === 'image2image' && image) {
-    requestBody.extra_body.image = [image];
+    requestBody.image = [image];
   }
 
   try {
@@ -115,13 +112,13 @@ function mockGenerateImage({ prompt, size, mode = 'text2image', image = null }) 
   });
 }
 
-// 常用尺寸
+// 常用尺寸（Agnes Image 支持的尺寸）
 export const IMAGE_SIZES = [
-  { value: '1024x768', label: '横屏 1024×768' },
+  { value: '1024x768', label: '横屏 1024×768（推荐）' },
   { value: '768x1024', label: '竖屏 768×1024' },
   { value: '1024x1024', label: '方形 1024×1024' },
-  { value: '1280x720', label: '高清横屏 1280×720' },
-  { value: '720x1280', label: '高清竖屏 720×1280' },
+  { value: '1536x1024', label: '宽屏 1536×1024' },
+  { value: '1024x1536', label: '长屏 1024×1536' },
 ];
 
 // 风格
