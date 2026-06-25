@@ -100,7 +100,7 @@ export async function onRequestPost(context) {
       };
 
       // 生成签名
-      const sign = generateSign(payParams, epayKey);
+      const sign = await generateSign(payParams, epayKey);
       payParams.sign = sign;
       payParams.sign_type = 'MD5';
 

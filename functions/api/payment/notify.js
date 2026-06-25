@@ -18,7 +18,7 @@ export async function onRequestPost(context) {
 
     // 验证签名
     const epayKey = env.EPAY_KEY;
-    if (!verifySign(params, epayKey)) {
+    if (!await verifySign(params, epayKey)) {
       console.error('签名验证失败');
       return new Response('fail', { status: 400 });
     }
