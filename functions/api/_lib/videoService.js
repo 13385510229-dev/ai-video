@@ -159,45 +159,36 @@ export async function createVideoTask(params, env) {
     imageCount: images?.length || 0,
   });
 
-  // 重试 1 次（总共 2 次）
-  let lastError = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(`${apiBase}/videos`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(90000), // 90 秒超时（图生视频更慢）
-      });
+  // 直接请求，不重试（避免总时间太长）
+  try {
+    const res = await fetch(`${apiBase}/videos`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(120000), // 120 秒超时
+    });
 
-      if (!res.ok) {
-        const err = await res.text().catch(() => '');
-        throw new Error(`API error ${res.status}: ${err}`);
-      }
-
-      const data = await res.json();
-      const taskId = data.id || data.task_id || (data.data && data.data.id);
-
-      return {
-        task_id: taskId,
-        status: 'processing',
-        mode: 'agnes',
-      };
-    } catch (error) {
-      lastError = error;
-      console.log(`Attempt ${attempt + 1} failed:`, error.message);
-      if (attempt < 1) {
-        await new Promise(r => setTimeout(r, 2000)); // 只重试 1 次
-      }
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`API error ${res.status}: ${err}`);
     }
-  }
 
-  // 全部失败，直接抛出错误（暂时去掉模拟模式兜底，方便排查问题）
-  throw lastError || new Error('Agnes API 调用失败');
-}
+    const data = await res.json();
+    const taskId = data.id || data.task_id || (data.data && data.data.id);
+
+    return {
+      task_id: taskId,
+      status: 'processing',
+      mode: 'agnes',
+    };
+  } catch (error) {
+    console.error('Agnes API 调用失败:', error.message);
+    // 直接抛出错误（暂时去掉模拟模式兜底，方便排查问题）
+    throw error;
+  }
 
 // 查询视频任务状态
 export async function getVideoTaskStatus(taskId, env) {
