@@ -48,12 +48,20 @@ function calculateResolution(aspectRatio) {
   }
 }
 
-// 风格关键词映射
+// 风格关键词映射（加强版，权重更高）
 const styleKeywords = {
-  realistic: 'realistic, photo-realistic, hyperrealistic, ',
-  anime: 'anime style, manga, 2d animation, ',
-  '3d': '3d render, octane render, CGI, ',
-  cinematic: 'cinematic, film grain, movie shot, dramatic lighting, ',
+  realistic: 'photorealistic, hyperrealistic, ultra realistic, real photo, 8k uhd, dslr, high quality, highly detailed, sharp focus, ',
+  anime: 'anime style, manga, 2d animation, japanese anime, vibrant colors, cel shading, anime artwork, ',
+  '3d': '3d render, octane render, CGI, 3d animation, pixar style, disney style, 3d cartoon, ',
+  cinematic: 'cinematic, film grain, movie shot, dramatic lighting, hollywood style, anamorphic lens, cinematic color grading, ',
+};
+
+// 风格对应的负面提示词（避免生成其他风格）
+const styleNegativeKeywords = {
+  realistic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, ',
+  anime: 'realistic, photo, 3d render, cgi, photorealistic, hyperrealistic, ',
+  '3d': 'anime, 2d, cartoon, manga, realistic, photo, photorealistic, ',
+  cinematic: '', // 电影感是通用风格，不需要反向
 };
 
 // 创建视频生成任务
@@ -91,11 +99,15 @@ export async function createVideoTask(params, env) {
   const stylePrefix = styleKeywords[style] || '';
   const fullPrompt = stylePrefix + prompt;
 
+  // 风格对应的负面提示词
+  const styleNegativePrefix = styleNegativeKeywords[style] || '';
+  const fullNegativePrompt = styleNegativePrefix + (negative_prompt || '');
+
   // 构建请求体
   const requestBody = {
     model: 'agnes-video-v2.0',
     prompt: fullPrompt,
-    negative_prompt,
+    negative_prompt: fullNegativePrompt,
     height,
     width,
     num_frames,

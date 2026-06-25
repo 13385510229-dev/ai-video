@@ -19,18 +19,28 @@ export async function generateImage({
     return mockGenerateImage({ prompt, size, mode, image });
   }
 
-  // 风格关键词
+  // 风格关键词（加强版）
   const styleKeywords = {
-    realistic: 'realistic, photo-realistic, hyperrealistic, ',
-    anime: 'anime style, manga, 2d illustration, ',
-    '3d': '3d render, octane render, CGI, ',
-    cinematic: 'cinematic, film grain, movie shot, dramatic lighting, ',
+    realistic: 'photorealistic, hyperrealistic, ultra realistic, real photo, 8k uhd, dslr, high quality, highly detailed, sharp focus, ',
+    anime: 'anime style, manga, 2d illustration, japanese anime, vibrant colors, cel shading, anime artwork, ',
+    '3d': '3d render, octane render, CGI, 3d animation, pixar style, disney style, 3d cartoon, ',
+    cinematic: 'cinematic, film grain, movie shot, dramatic lighting, hollywood style, anamorphic lens, cinematic color grading, ',
+  };
+
+  // 风格对应的负面提示词
+  const styleNegativeKeywords = {
+    realistic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, ',
+    anime: 'realistic, photo, 3d render, cgi, photorealistic, hyperrealistic, ',
+    '3d': 'anime, 2d, cartoon, manga, realistic, photo, photorealistic, ',
+    cinematic: '', // 电影感是通用风格，不需要反向
   };
 
   // 拼接提示词
   let fullPrompt = prompt;
+  let styleNegative = '';
   if (style && styleKeywords[style]) {
     fullPrompt = styleKeywords[style] + prompt;
+    styleNegative = styleNegativeKeywords[style] || '';
   }
 
   // 构建请求体（基础参数）
@@ -41,8 +51,9 @@ export async function generateImage({
   };
 
   // 负面提示词（拼到 prompt 后面，避免参数不支持的问题）
-  if (negativePrompt) {
-    requestBody.prompt = `${fullPrompt}。负面提示词：不要${negativePrompt}`;
+  if (negativePrompt || styleNegative) {
+    const combinedNegative = styleNegative + negativePrompt;
+    requestBody.prompt = `${fullPrompt}。负面提示词：不要${combinedNegative}`;
   }
 
   // 图生图模式
