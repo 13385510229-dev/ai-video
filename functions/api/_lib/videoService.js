@@ -159,7 +159,10 @@ export async function createVideoTask(params, env) {
     imageCount: images?.length || 0,
   });
 
-  // 直接请求，不重试（避免总时间太长）
+  // 直接请求，不重试
+  console.log('开始调用 Agnes API，模式:', mode, '时长:', duration, '比例:', aspect_ratio);
+  const startTime = Date.now();
+  
   try {
     const res = await fetch(`${apiBase}/videos`, {
       method: 'POST',
@@ -168,8 +171,11 @@ export async function createVideoTask(params, env) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(120000), // 120 秒超时
+      signal: AbortSignal.timeout(300000), // 300 秒超时（5分钟）
     });
+
+    const elapsed = Date.now() - startTime;
+    console.log('Agnes API 返回，耗时:', elapsed, 'ms，状态:', res.status);
 
     if (!res.ok) {
       const err = await res.text().catch(() => '');
@@ -179,14 +185,16 @@ export async function createVideoTask(params, env) {
     const data = await res.json();
     const taskId = data.id || data.task_id || (data.data && data.data.id);
 
+    console.log('任务创建成功，task_id:', taskId);
+
     return {
       task_id: taskId,
       status: 'processing',
       mode: 'agnes',
     };
   } catch (error) {
-    console.error('Agnes API 调用失败:', error.message);
-    // 直接抛出错误（暂时去掉模拟模式兜底，方便排查问题）
+    const elapsed = Date.now() - startTime;
+    console.error('Agnes API 调用失败，耗时:', elapsed, 'ms，错误:', error.message);
     throw error;
   }
 }

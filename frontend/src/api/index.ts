@@ -87,7 +87,7 @@ export const generateVideo = (params: {
   numInferenceSteps?: number;
 }) => {
   return api.post('/videos/generate', params, {
-    timeout: 200000, // 视频生成超时时间设为 200 秒（图生视频更慢）
+    timeout: 360000, // 视频生成超时时间设为 360 秒（6分钟）
   });
 };
 
