@@ -163,7 +163,7 @@ export async function createVideoTask(params, env) {
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`${apiBase}/videos/generations`, {
+      const res = await fetch(`${apiBase}/videos`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
