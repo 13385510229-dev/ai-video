@@ -152,7 +152,10 @@ export default function ImageGenerate() {
       </div>
 
       {/* 生成卡片 */}
-      <div className="generate-card bg-white border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up">
+      <div 
+        className="generate-card border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up"
+        style={{ backgroundColor: '#ffffff', color: '#111111' }}
+      >
         {/* 生成模式 */}
         <div className="mb-8">
           <label className="block text-sm font-medium text-gray-700 mb-3">
