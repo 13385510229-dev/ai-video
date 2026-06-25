@@ -79,19 +79,44 @@ export async function onRequestGet(context) {
           // 失败时退还次数（直接用 fetch）
           const { data: users } = await supabase
             .from('users')
-            .select('balance')
+            .select('balance, daily_credits_used, membership_type, membership_expire_at')
             .eq('id', userId);
 
           if (users?.[0]) {
-            await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
-              method: 'PATCH',
-              headers: {
-                'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-                'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ balance: users[0].balance + (video.cost || 1) }),
-            });
+            const user = users[0];
+            const cost = video.cost || 1;
+            const now = new Date();
+            
+            // 判断用户是否是有效会员
+            const isMember = user.membership_type && 
+                           user.membership_expire_at && 
+                           new Date(user.membership_expire_at) > now;
+            
+            if (isMember && user.daily_credits_used > 0) {
+              // 会员且用了每日次数，优先退还每日次数
+              await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+                  'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                  daily_credits_used: Math.max(0, user.daily_credits_used - cost) 
+                }),
+              });
+            } else {
+              // 非会员或每日次数没用，退还余额
+              await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+                  'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ balance: user.balance + cost }),
+              });
+            }
           }
 
           video.status = 'failed';

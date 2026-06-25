@@ -114,7 +114,6 @@ export async function onRequestPost(context) {
         package: pkg,
         paymentMode: 'epay',
         payUrl,
-        payParams,
       });
     }
 

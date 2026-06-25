@@ -128,34 +128,71 @@ export async function deductCredits(userId, cost, supabase, supabaseUrl, service
       if (userInfo.balance < cost) {
         return { success: false, error: '余额不足' };
       }
-      // 扣余额
-      await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ balance: userInfo.balance - cost }),
-      });
-      return { success: true, used_daily: false, remaining_balance: userInfo.balance - cost };
+      
+      // 带条件更新，防止并发扣成负数
+      const balanceUpdateRes = await fetch(
+        `${supabaseUrl}/rest/v1/users?id=eq.${userId}&balance=gte.${cost}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify({ balance: userInfo.balance - cost }),
+        }
+      );
+
+      if (!balanceUpdateRes.ok) {
+        throw new Error('更新余额失败');
+      }
+
+      const updated = await balanceUpdateRes.json();
+      if (!updated || updated.length === 0) {
+        // 没有更新到行，说明并发了或者余额不足
+        return { success: false, error: '余额不足' };
+      }
+
+      return { 
+        success: true, 
+        used_daily: false, 
+        remaining_balance: updated[0].balance,
+      };
     }
 
     // 是会员，先扣每日次数
     const dailyRemaining = userInfo.daily_credits_remaining || 0;
+    const dailyTotal = userInfo.daily_credits_total || 0;
     
     if (dailyRemaining >= cost) {
       // 每日次数够用，扣每日次数
       const newUsed = (userInfo.daily_credits_used || 0) + cost;
-      await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ daily_credits_used: newUsed }),
-      });
+      
+      const dailyUpdateRes = await fetch(
+        `${supabaseUrl}/rest/v1/users?id=eq.${userId}&daily_credits_used=lte.${dailyTotal - cost}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify({ daily_credits_used: newUsed }),
+        }
+      );
+
+      if (!dailyUpdateRes.ok) {
+        throw new Error('更新每日次数失败');
+      }
+
+      const updated = await dailyUpdateRes.json();
+      if (!updated || updated.length === 0) {
+        // 并发了，重新查一下再判断
+        return { success: false, error: '今日次数不足' };
+      }
+
       return { 
         success: true, 
         used_daily: true, 
@@ -172,24 +209,38 @@ export async function deductCredits(userId, cost, supabase, supabaseUrl, service
       const newUsed = (userInfo.daily_credits_used || 0) + dailyRemaining;
       const newBalance = userInfo.balance - remainingCost;
 
-      await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          daily_credits_used: newUsed,
-          balance: newBalance,
-        }),
-      });
+      // 同时更新每日次数和余额，带余额条件
+      const updateRes = await fetch(
+        `${supabaseUrl}/rest/v1/users?id=eq.${userId}&balance=gte.${remainingCost}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify({ 
+            daily_credits_used: newUsed,
+            balance: newBalance,
+          }),
+        }
+      );
+
+      if (!updateRes.ok) {
+        throw new Error('更新次数失败');
+      }
+
+      const updated = await updateRes.json();
+      if (!updated || updated.length === 0) {
+        return { success: false, error: '余额不足' };
+      }
 
       return { 
         success: true, 
         used_daily: true, 
         daily_remaining: 0,
-        remaining_balance: newBalance,
+        remaining_balance: updated[0].balance,
       };
     }
   } catch (error) {
@@ -206,9 +257,42 @@ export async function activateMembership(userId, planType, supabaseUrl, serviceK
       return { success: false, error: '无效的套餐类型' };
     }
 
-    // 计算到期时间
+    // 先查用户当前的会员状态
+    const userQueryRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=membership_type,membership_expire_at`, {
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
+
+    if (!userQueryRes.ok) {
+      throw new Error('查询用户失败');
+    }
+
+    const users = await userQueryRes.json();
+    if (!users?.[0]) {
+      return { success: false, error: '用户不存在' };
+    }
+
+    const user = users[0];
     const now = new Date();
-    const expireAt = new Date(now.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+    let expireAt;
+
+    // 判断是新开通还是续费
+    if (user.membership_type && user.membership_expire_at) {
+      const currentExpireAt = new Date(user.membership_expire_at);
+      
+      if (currentExpireAt > now) {
+        // 会员还没到期，续费：在现有基础上延长
+        expireAt = new Date(currentExpireAt.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+      } else {
+        // 会员已到期，从现在开始算
+        expireAt = new Date(now.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      // 从未开通过会员，从现在开始算
+      expireAt = new Date(now.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+    }
 
     // 更新用户会员信息
     await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
@@ -231,6 +315,7 @@ export async function activateMembership(userId, planType, supabaseUrl, serviceK
       plan: plan.name,
       expire_at: expireAt.toISOString(),
       daily_credits: plan.daily_credits,
+      is_renewal: user.membership_type && new Date(user.membership_expire_at) > now,
     };
   } catch (error) {
     console.error('开通会员失败:', error);

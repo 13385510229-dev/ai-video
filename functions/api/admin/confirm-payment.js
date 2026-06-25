@@ -1,23 +1,5 @@
 import { jsonResponse, errorResponse, handleOptions, requireAdmin } from '../_lib/auth.js';
-import { createSupabaseClient } from '../_lib/supabase.js';
 import { activateMembership, MEMBERSHIP_PLANS } from '../_lib/membership.js';
-
-// 根据金额判断套餐类型
-function getPackageByAmount(amount) {
-  const amountNum = parseFloat(amount);
-  
-  // 次卡
-  if (amountNum === 9.9) return { type: 'credits', credits: 10 };
-  if (amountNum === 24.9) return { type: 'credits', credits: 30 };
-  if (amountNum === 69.9) return { type: 'credits', credits: 100 };
-  
-  // 会员
-  if (amountNum === 39) return { type: 'membership', membership_type: 'monthly' };
-  if (amountNum === 99) return { type: 'membership', membership_type: 'quarterly' };
-  if (amountNum === 299) return { type: 'membership', membership_type: 'yearly' };
-  
-  return { type: 'credits', credits: 0 };
-}
 
 export async function onRequestPost(context) {
   try {
@@ -36,16 +18,23 @@ export async function onRequestPost(context) {
       return errorResponse('订单ID不能为空');
     }
 
-    // 初始化 Supabase
-    const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+    const supabaseUrl = env.SUPABASE_URL;
+    const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // 查询订单
-    const { data: orders, error: orderError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId);
+    // 第一步：查询订单
+    const orderQueryRes = await fetch(`${supabaseUrl}/rest/v1/orders?id=eq.${orderId}&select=*`, {
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
 
-    if (orderError || !orders?.[0]) {
+    if (!orderQueryRes.ok) {
+      return errorResponse('查询订单失败');
+    }
+
+    const orders = await orderQueryRes.json();
+    if (!orders?.[0]) {
       return errorResponse('订单不存在');
     }
 
@@ -55,22 +44,23 @@ export async function onRequestPost(context) {
       return errorResponse('订单已支付，无需重复确认');
     }
 
-    // 判断套餐类型
-    const pkg = getPackageByAmount(order.amount);
-
-    // 更新订单状态（直接用 fetch）
-    const orderUpdateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/orders?id=eq.${orderId}`, {
-      method: 'PATCH',
-      headers: {
-        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        status: 'paid',
-        paid_at: new Date().toISOString(),
-      }),
-    });
+    // 第二步：乐观锁更新订单状态（只有 pending 才会更新成功）
+    const orderUpdateRes = await fetch(
+      `${supabaseUrl}/rest/v1/orders?id=eq.${orderId}&status=eq.pending`,
+      {
+        method: 'PATCH',
+        headers: {
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+        }),
+      }
+    );
 
     if (!orderUpdateRes.ok) {
       const err = await orderUpdateRes.json().catch(() => ({}));
@@ -78,55 +68,52 @@ export async function onRequestPost(context) {
       return errorResponse('确认失败，请稍后重试', 500);
     }
 
-    // 根据套餐类型处理
-    if (pkg.type === 'membership') {
-      // 开通会员
-      const result = await activateMembership(
-        order.user_id,
-        pkg.membership_type,
-        env.SUPABASE_URL,
-        env.SUPABASE_SERVICE_ROLE_KEY
+    const updatedOrders = await orderUpdateRes.json();
+    if (!updatedOrders || updatedOrders.length === 0) {
+      return errorResponse('订单状态已变更，无需重复操作');
+    }
+
+    const credits = order.credits || 0;
+
+    // 第三步：处理订单
+    if (credits > 0) {
+      // 次卡：给用户加次数
+      const userQueryRes = await fetch(
+        `${supabaseUrl}/rest/v1/users?id=eq.${order.user_id}&select=balance`,
+        {
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+          },
+        }
       );
 
-      if (!result.success) {
-        return errorResponse('开通会员失败，请手动处理', 500);
+      if (!userQueryRes.ok) {
+        console.error('查询用户失败');
+        return errorResponse('用户查询失败，请手动处理', 500);
       }
 
-      return jsonResponse({
-        success: true,
-        message: '会员开通成功',
-        membership: {
-          type: pkg.membership_type,
-          name: MEMBERSHIP_PLANS[pkg.membership_type]?.name,
-          expire_at: result.expire_at,
-          daily_credits: result.daily_credits,
-        },
-      });
-    } else {
-      // 次卡：给用户加次数
-      const { data: users, error: userError } = await supabase
-        .from('users')
-        .select('balance')
-        .eq('id', order.user_id);
-
-      if (userError || !users?.[0]) {
+      const users = await userQueryRes.json();
+      if (!users?.[0]) {
         return errorResponse('用户不存在');
       }
 
-      const user = users[0];
-      const credits = pkg.credits || order.credits || 0;
-      const newBalance = (user.balance || 0) + credits;
+      const currentBalance = users[0].balance || 0;
+      const newBalance = currentBalance + credits;
 
-      // 更新用户余额（直接用 fetch）
-      const balanceUpdateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${order.user_id}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ balance: newBalance }),
-      });
+      // 更新用户余额
+      const balanceUpdateRes = await fetch(
+        `${supabaseUrl}/rest/v1/users?id=eq.${order.user_id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ balance: newBalance }),
+        }
+      );
 
       if (!balanceUpdateRes.ok) {
         const err = await balanceUpdateRes.json().catch(() => ({}));
@@ -138,6 +125,37 @@ export async function onRequestPost(context) {
         success: true,
         message: '支付确认成功',
         newBalance,
+      });
+    } else {
+      // 会员：根据金额判断类型
+      const amount = parseFloat(order.amount);
+      let planType = 'monthly';
+      
+      if (Math.abs(amount - 39) < 0.01) planType = 'monthly';
+      else if (Math.abs(amount - 99) < 0.01) planType = 'quarterly';
+      else if (Math.abs(amount - 299) < 0.01) planType = 'yearly';
+
+      const result = await activateMembership(
+        order.user_id,
+        planType,
+        supabaseUrl,
+        serviceKey
+      );
+
+      if (!result.success) {
+        return errorResponse('开通会员失败，请手动处理', 500);
+      }
+
+      return jsonResponse({
+        success: true,
+        message: '会员开通成功',
+        membership: {
+          type: planType,
+          name: MEMBERSHIP_PLANS[planType]?.name,
+          expire_at: result.expire_at,
+          daily_credits: result.daily_credits,
+          is_renewal: result.is_renewal,
+        },
       });
     }
   } catch (error) {

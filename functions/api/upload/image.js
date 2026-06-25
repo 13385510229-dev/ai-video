@@ -1,15 +1,24 @@
 // 上传图片到 Supabase Storage
 import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 
-export const onRequestOptions = handleOptions;
+export async function onRequestOptions() {
+  return handleOptions();
+}
 
-export const onRequestPost = requireAuth(async (context) => {
+export async function onRequestPost(context) {
   try {
-    const { env, data } = context;
-    const userId = data.userId;
+    const { request, env } = context;
+
+    // 认证
+    const authResult = await requireAuth(request, env);
+    if (authResult.error) {
+      return errorResponse(authResult.error, 401);
+    }
+
+    const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
 
     // 读取请求体
-    const body = await context.request.json();
+    const body = await request.json();
     const { image: base64Image, filename } = body;
 
     if (!base64Image) {
@@ -39,18 +48,20 @@ export const onRequestPost = requireAuth(async (context) => {
     const uploadUrl = `${env.SUPABASE_URL}/storage/v1/object/${uploadPath}`;
 
     const uploadRes = await fetch(uploadUrl, {
-      method: 'PUT',
+      method: 'POST',
       headers: {
         'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
         'Content-Type': mimeType,
+        'x-upsert': 'true',
       },
       body: bytes,
     });
 
     if (!uploadRes.ok) {
-      const errText = await uploadRes.text();
-      return errorResponse(`Supabase上传失败 (${uploadRes.status}): ${errText}`);
+      const errText = await uploadRes.text().catch(() => '未知错误');
+      console.error('Supabase上传失败:', uploadRes.status, errText);
+      return errorResponse(`上传失败: ${errText}`);
     }
 
     // 构建公开 URL
@@ -63,6 +74,7 @@ export const onRequestPost = requireAuth(async (context) => {
     });
 
   } catch (error) {
-    return errorResponse(`服务器错误: ${error.message}`);
+    console.error('上传图片失败:', error);
+    return errorResponse(`服务器错误: ${error.message || '未知错误'}`);
   }
-});
+}

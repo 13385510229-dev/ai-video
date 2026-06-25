@@ -38,10 +38,10 @@ export async function onRequestPost(context) {
     // 初始化 Supabase
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-    // 查询用户余额
+    // 查询用户余额和会员信息
     const { data: users, error: userError } = await supabase
       .from('users')
-      .select('balance')
+      .select('balance, daily_credits_used, membership_type, membership_expire_at')
       .eq('id', userId);
 
     if (userError || !users?.[0]) {
@@ -55,29 +55,7 @@ export async function onRequestPost(context) {
       return errorResponse('余额不足，请充值', 400);
     }
 
-    // 创建视频任务
-    const taskResult = await createVideoTask(
-      {
-        prompt,
-        negative_prompt: negativePrompt,
-        style,
-        duration,
-        aspect_ratio: aspectRatio,
-        mode,
-        image,
-        images,
-        seed,
-        num_inference_steps: numInferenceSteps,
-      },
-      env
-    );
-
-    // 如果 Agnes API 调用失败且降级到模拟模式，记录错误
-    if (taskResult.mode === 'simulation-fallback') {
-      console.warn('Agnes API 调用失败，已降级到模拟模式:', taskResult.error);
-    }
-
-    // 扣除次数（优先扣每日次数，再扣余额）
+    // 先扣除次数（优先扣每日次数，再扣余额）
     const deductResult = await deductCredits(
       userId,
       cost,
@@ -88,6 +66,64 @@ export async function onRequestPost(context) {
 
     if (!deductResult.success) {
       return errorResponse(deductResult.error || '余额不足，请充值', 400);
+    }
+
+    // 创建视频任务
+    let taskResult;
+    try {
+      taskResult = await createVideoTask(
+        {
+          prompt,
+          negative_prompt: negativePrompt,
+          style,
+          duration,
+          aspect_ratio: aspectRatio,
+          mode,
+          image,
+          images,
+          seed,
+          num_inference_steps: numInferenceSteps,
+        },
+        env
+      );
+    } catch (taskError) {
+      // 创建任务失败，退还次数
+      try {
+        if (deductResult.used_daily) {
+          // 扣的是每日次数，退还
+          const currentUsed = user.daily_credits_used || 0;
+          await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              daily_credits_used: Math.max(0, currentUsed - cost) 
+            }),
+          });
+        } else {
+          // 扣的是余额，退还
+          await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ balance: user.balance }),
+          });
+        }
+      } catch (refundError) {
+        console.error('退还次数失败:', refundError);
+      }
+      throw taskError;
+    }
+
+    // 如果 Agnes API 调用失败且降级到模拟模式，记录错误
+    if (taskResult.mode === 'simulation-fallback') {
+      console.warn('Agnes API 调用失败，已降级到模拟模式:', taskResult.error);
     }
 
     // 保存视频记录（直接用 fetch，确保 100% 生效）
@@ -115,6 +151,37 @@ export async function onRequestPost(context) {
     if (!insertRes.ok) {
       const err = await insertRes.json().catch(() => ({}));
       console.error('保存视频记录失败:', err);
+      
+      // 保存记录失败，退还次数
+      try {
+        if (deductResult.used_daily) {
+          const currentUsed = user.daily_credits_used || 0;
+          await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              daily_credits_used: Math.max(0, currentUsed - cost) 
+            }),
+          });
+        } else {
+          await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ balance: user.balance }),
+          });
+        }
+      } catch (refundError) {
+        console.error('退还次数失败:', refundError);
+      }
+      
       return errorResponse(`创建失败: ${err.message || JSON.stringify(err)}`);
     }
 
