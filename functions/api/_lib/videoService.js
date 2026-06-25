@@ -2,23 +2,23 @@
 // 纯 fetch 实现，无外部依赖
 
 // 计算 num_frames 和 frame_rate
+// 1080p 级别分辨率最大支持约 169 帧，这里保守用 161 帧
 function calculateFrames(duration) {
-  // num_frames 必须满足 8n + 1，且 <= 441
-  // 合法值：81, 121, 161, 201, 241, 281, 321, 361, 401, 441
+  // 合法帧数（8n + 1），高分辨率下最多到 161 帧
+  const validFrames = [81, 121, 161];
 
   let frameRate = 24;
   let targetFrames = duration * frameRate;
 
-  // 如果超过 18 秒，用 12fps 以获得更长时长
-  if (duration > 18) {
+  // 如果目标帧数超过最大支持，改用 12fps 以获得更长时长
+  if (targetFrames > validFrames[validFrames.length - 1]) {
     frameRate = 12;
     targetFrames = duration * frameRate;
   }
 
   // 找到最接近的合法 num_frames 值
-  const validFrames = [81, 121, 161, 201, 241, 281, 321, 361, 401, 441];
-  let bestFrames = 81;
-  let minDiff = Math.abs(targetFrames - 81);
+  let bestFrames = validFrames[0];
+  let minDiff = Math.abs(targetFrames - validFrames[0]);
 
   for (const f of validFrames) {
     const diff = Math.abs(targetFrames - f);
@@ -31,20 +31,20 @@ function calculateFrames(duration) {
   return { num_frames: bestFrames, frame_rate: frameRate };
 }
 
-// 计算分辨率
+// 计算分辨率（1024p 级别，都是 64 的倍数）
 function calculateResolution(aspectRatio) {
   switch (aspectRatio) {
     case '9:16':
-      return { width: 432, height: 768 };
+      return { width: 576, height: 1024 };
     case '1:1':
-      return { width: 768, height: 768 };
+      return { width: 1024, height: 1024 };
     case '4:3':
-      return { width: 1024, height: 768 };
+      return { width: 1344, height: 1024 };
     case '3:4':
-      return { width: 576, height: 768 };
+      return { width: 768, height: 1024 };
     case '16:9':
     default:
-      return { width: 1152, height: 768 };
+      return { width: 1792, height: 1024 };
   }
 }
 

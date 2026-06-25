@@ -125,13 +125,13 @@ function mockGenerateImage({ prompt, size, mode = 'text2image', image = null }) 
   });
 }
 
-// 常用尺寸（Agnes Image 支持的尺寸）
+// 常用尺寸（2K 级别，Agnes Image 2.1 Flash 支持）
 export const IMAGE_SIZES = [
-  { value: '1024x768', label: '横屏 1024×768（推荐）' },
-  { value: '768x1024', label: '竖屏 768×1024' },
-  { value: '1024x1024', label: '方形 1024×1024' },
-  { value: '1536x1024', label: '宽屏 1536×1024' },
-  { value: '1024x1536', label: '长屏 1024×1536' },
+  { value: '2048x1536', label: '横屏 2048×1536（推荐）' },
+  { value: '1536x2048', label: '竖屏 1536×2048' },
+  { value: '2048x2048', label: '方形 2048×2048' },
+  { value: '2304x1536', label: '宽屏 2304×1536' },
+  { value: '1536x2304', label: '长屏 1536×2304' },
 ];
 
 // 风格

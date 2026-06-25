@@ -97,7 +97,6 @@ export const VIDEO_STYLES = [
 export const VIDEO_DURATIONS = [
   { value: 5, label: '5秒', cost: 1 },
   { value: 10, label: '10秒', cost: 2 },
-  { value: 30, label: '30秒', cost: 3 },
 ];
 
 // 视频比例
@@ -111,11 +110,11 @@ export const ASPECT_RATIOS = [
 
 // 图片尺寸
 export const IMAGE_SIZES = [
-  { value: '1024x768', label: '横屏 1024×768' },
-  { value: '768x1024', label: '竖屏 768×1024' },
-  { value: '1024x1024', label: '方形 1024×1024' },
-  { value: '1280x720', label: '高清横屏 1280×720' },
-  { value: '720x1280', label: '高清竖屏 720×1280' },
+  { value: '2048x1536', label: '横屏 2048×1536（推荐）' },
+  { value: '1536x2048', label: '竖屏 1536×2048' },
+  { value: '2048x2048', label: '方形 2048×2048' },
+  { value: '2304x1536', label: '宽屏 2304×1536' },
+  { value: '1536x2304', label: '长屏 1536×2304' },
 ];
 
 // 图片生成模式
