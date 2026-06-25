@@ -189,6 +189,7 @@ export async function createVideoTask(params, env) {
     // 直接抛出错误（暂时去掉模拟模式兜底，方便排查问题）
     throw error;
   }
+}
 
 // 查询视频任务状态
 export async function getVideoTaskStatus(taskId, env) {
