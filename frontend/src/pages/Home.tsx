@@ -1,173 +1,97 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ParticleBackground from '../components/ParticleBackground';
+import WaveBackground from '../components/WaveBackground';
 import { useAuthStore } from '../store/auth';
-
-const navItems = [
-  { id: 'video', label: '视频生成', path: '/video' },
-  { id: 'image', label: '图片生成', path: '/image' },
-  { id: 'history', label: '创作历史', path: '/history' },
-  { id: 'profile', label: '个人中心', path: '/profile' },
-];
 
 const Home = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [rotation, setRotation] = useState(0);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  // 自动旋转
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRotation((prev) => prev + 0.2);
-    }, 50);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleNavClick = (path: string) => {
-    navigate(path);
+  const handleStart = () => {
+    if (user) {
+      navigate('/video');
+    } else {
+      navigate('/login');
+    }
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black">
-      <ParticleBackground />
+    <div className="relative min-h-screen overflow-hidden bg-white">
+      <WaveBackground />
 
       {/* 主内容 */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6">
-        {/* 标题 */}
-        <div className="text-center mb-20 animate-fade-in">
-          <h1 className="text-7xl md:text-8xl font-bold mb-6 tracking-tight text-white">
-            AI 创意工坊
-          </h1>
-          <p className="text-gray-400 text-xl max-w-2xl mx-auto font-light">
-            用 AI 释放你的创造力
-          </p>
-          {user && (
-            <p className="text-gray-500 mt-6 text-sm">
-              剩余次数：<span className="text-white font-medium">{user.balance}</span> 次
-            </p>
-          )}
-        </div>
-
-        {/* 3D 圆环导航 */}
-        <div
-          className="relative w-96 h-96 md:w-[500px] md:h-[500px]"
-          style={{ perspective: '1200px' }}
-        >
-          <div
-            className="relative w-full h-full"
-            style={{
-              transformStyle: 'preserve-3d',
-              transform: `rotateX(65deg) rotateZ(${rotation}deg)`,
-              transition: 'transform 0.1s linear',
-            }}
-          >
-            {navItems.map((item, index) => {
-              const angle = (index / navItems.length) * Math.PI * 2;
-              const radius = 200;
-              const x = Math.cos(angle) * radius;
-              const z = Math.sin(angle) * radius;
-              const isHovered = hoveredId === item.id;
-
-              return (
-                <div
-                  key={item.id}
-                  className="absolute left-1/2 top-1/2 cursor-pointer"
-                  style={{
-                    transform: `translate(-50%, -50%) translate3d(${x}px, 0, ${z}px) rotateX(-65deg) rotateZ(${-rotation}deg)`,
-                    transformStyle: 'preserve-3d',
-                  }}
-                  onMouseEnter={() => setHoveredId(item.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  onClick={() => handleNavClick(item.path)}
-                >
-                  {/* 玻璃小球 */}
-                  <div
-                    className={`relative w-28 h-28 md:w-32 md:h-32 rounded-full flex items-center justify-center transition-all duration-500 ${
-                      isHovered ? 'scale-125' : 'scale-100'
-                    }`}
-                    style={{
-                      background: isHovered
-                        ? 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02))'
-                        : 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01))',
-                      backdropFilter: 'blur(20px)',
-                      border: isHovered
-                        ? '1px solid rgba(255, 255, 255, 0.4)'
-                        : '1px solid rgba(255, 255, 255, 0.1)',
-                      boxShadow: isHovered
-                        ? '0 0 60px rgba(255, 255, 255, 0.15), inset 0 0 40px rgba(255, 255, 255, 0.05)'
-                        : '0 0 30px rgba(255, 255, 255, 0.05), inset 0 0 20px rgba(255, 255, 255, 0.02)',
-                    }}
-                  >
-                    {/* 高光 */}
-                    <div
-                      className="absolute top-3 left-6 w-10 h-5 rounded-full"
-                      style={{
-                        background: 'radial-gradient(ellipse, rgba(255, 255, 255, 0.3), transparent)',
-                      }}
-                    />
-                    <span
-                      className={`text-sm font-medium tracking-wide transition-all duration-300 ${
-                        isHovered ? 'text-white' : 'text-gray-300'
-                      }`}
-                    >
-                      {item.label}
-                    </span>
-                  </div>
-
-                  {/* 悬停时的光晕 */}
-                  {isHovered && (
-                    <div
-                      className="absolute inset-0 rounded-full"
-                      style={{
-                        background: 'radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent 70%)',
-                        transform: 'scale(2)',
-                        animation: 'pulse-glow 2s ease-in-out infinite',
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-
-            {/* 圆环轨道 */}
-            <div
-              className="absolute left-1/2 top-1/2 w-[400px] h-[400px] md:w-[440px] md:h-[440px] rounded-full -translate-x-1/2 -translate-y-1/2"
-              style={{
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: '0 0 40px rgba(255, 255, 255, 0.03), inset 0 0 40px rgba(255, 255, 255, 0.02)',
-              }}
-            />
-
-            {/* 内圈轨道 */}
-            <div
-              className="absolute left-1/2 top-1/2 w-[280px] h-[280px] md:w-[300px] md:h-[300px] rounded-full -translate-x-1/2 -translate-y-1/2"
-              style={{
-                border: '1px solid rgba(255, 255, 255, 0.04)',
-              }}
-            />
+        {/* 内容区域 */}
+        <div className="text-center max-w-4xl mx-auto">
+          {/* 顶部小字标签 */}
+          <div className="inline-flex items-center gap-2 mb-8 text-gray-500 text-sm font-medium tracking-widest uppercase">
+            <span className="w-8 h-px bg-gray-300"></span>
+            AI 创意生成平台
+            <span className="w-8 h-px bg-gray-300"></span>
           </div>
-        </div>
 
-        {/* 底部提示 */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-gray-600 text-xs tracking-widest uppercase">
-          移动鼠标与粒子互动
+          {/* 大标题 */}
+          <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 tracking-tight text-gray-900 leading-tight">
+            释放你的
+            <br />
+            <span className="text-gray-400">创意想象力</span>
+          </h1>
+
+          {/* 描述文字 */}
+          <p className="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto mb-12 font-light leading-relaxed">
+            一键生成 AI 视频和图片，无需专业技能，
+            <br className="hidden md:block" />
+            让每个人都能轻松创作出惊艳的视觉作品
+          </p>
+
+          {/* 按钮组 */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
+            <button
+              onClick={handleStart}
+              className="px-8 py-4 bg-gray-900 text-white text-sm font-medium tracking-wide rounded-full hover:bg-gray-800 transition-all duration-300 hover:shadow-lg hover:shadow-gray-900/20"
+            >
+              开始创作
+            </button>
+            <button
+              onClick={() => navigate('/login')}
+              className="px-8 py-4 border border-gray-200 text-gray-700 text-sm font-medium tracking-wide rounded-full hover:border-gray-300 hover:bg-gray-50 transition-all duration-300"
+            >
+              了解更多
+            </button>
+          </div>
+
+          {/* 特性标签 */}
+          <div className="flex flex-wrap items-center justify-center gap-6 mb-16 text-xs text-gray-400 font-medium tracking-wider uppercase">
+            <span>✨ 视频生成</span>
+            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+            <span>🖼️ 图片生成</span>
+            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+            <span>⚡ 快速出图</span>
+            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+            <span>🎨 多种风格</span>
+          </div>
+
+          {/* 统计数据 */}
+          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto pt-12 border-t border-gray-100">
+            <div className="text-center">
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">320+</div>
+              <div className="text-xs text-gray-400 tracking-wider uppercase">已生成作品</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">8s</div>
+              <div className="text-xs text-gray-400 tracking-wider uppercase">平均生成时间</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">120+</div>
+              <div className="text-xs text-gray-400 tracking-wider uppercase">活跃用户</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <style>{`
-        @keyframes pulse-glow {
-          0%, 100% { opacity: 0.5; transform: scale(1.8); }
-          50% { opacity: 1; transform: scale(2.3); }
-        }
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(-20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-          animation: fade-in 1s ease-out;
-        }
-      `}</style>
+      {/* 底部小字 */}
+      <div className="absolute bottom-8 left-0 right-0 text-center text-xs text-gray-300 z-10">
+        移动鼠标与波浪互动
+      </div>
     </div>
   );
 };
