@@ -19,28 +19,33 @@ export async function generateImage({
     return mockGenerateImage({ prompt, size, mode, image });
   }
 
-  // 风格关键词（优化版，每个关键词都有用）
+  // 风格关键词（精简版，避免提示词过长）
   const styleKeywords = {
-    realistic: 'photorealistic, hyperrealistic, ultra realistic, real photo, high quality, highly detailed, sharp focus, intricate details, crisp clear, real person, real human, real skin, skin texture, pores, natural lighting, professional photography, dslr, 8k uhd, ',
-    anime: 'anime style, manga, 2d illustration, japanese anime, vibrant colors, cel shading, anime artwork, anime key visual, studio ghibli style, makoto shinkai style, beautiful anime art, high quality anime, highly detailed, sharp focus, clean line art, masterpiece, best quality, ',
-    '3d': '3d render, octane render, CGI, 3d animation, pixar style, disney style, 3d cartoon, unreal engine 5, ray tracing, subsurface scattering, highly detailed 3d, ultra detailed, sharp focus, cinematic lighting, high quality, photorealistic 3d, ',
-    cinematic: 'cinematic, film grain, movie shot, dramatic lighting, hollywood style, anamorphic lens, cinematic color grading, live action, real people, real actors, film photography, arri alexa, shot on film, imax quality, epic, grand, sweeping, highly detailed, sharp focus, ultra realistic, wide shot, establishing shot, ',
+    realistic: 'photorealistic, real photo, highly detailed, sharp focus, real person, real skin, professional photography, 8k uhd, ',
+    anime: 'anime style, japanese anime, vibrant colors, anime artwork, studio ghibli style, masterpiece, best quality, ',
+    '3d': '3d render, octane render, CGI, pixar style, unreal engine 5, highly detailed, cinematic lighting, ',
+    cinematic: 'cinematic, film grain, dramatic lighting, cinematic color grading, live action, real people, shot on film, highly detailed, sharp focus, ',
   };
 
-  // 风格对应的负面提示词（避免生成其他风格 + 避免模糊低质）
+  // 风格对应的负面提示词（精简版）
   const styleNegativeKeywords = {
-    realistic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, 3d render, cgi, 3d cartoon, pixar, disney style, stylized, comic, comic book, rendered, 3d, game, video game, game screenshot, plastic, fake, doll, toy, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, ',
-    anime: 'realistic, photo, 3d render, cgi, photorealistic, hyperrealistic, real person, real human, live action, film, movie, photograph, dslr, camera shot, realistic style, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, sketch, line art, unfinished, ',
-    '3d': 'anime, 2d, cartoon, manga, realistic, photo, photorealistic, real person, real human, live action, drawing, painting, illustration, comic, 2d animation, hand drawn, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, low poly, bad topology, texture error, ',
-    cinematic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, 3d render, cgi, pixar, disney, 3d cartoon, stylized, comic, comic book, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, distorted, deformed, ugly, watermark, text, signature, cheap, home video, phone footage, found footage, ',
+    realistic: 'anime, cartoon, 2d, manga, 3d render, cgi, game, plastic, fake, blurry, out of focus, low quality, ugly, watermark, text, ',
+    anime: 'realistic, photo, 3d render, cgi, photorealistic, live action, blurry, out of focus, low quality, ugly, watermark, text, sketch, ',
+    '3d': 'anime, 2d, cartoon, realistic, photo, photorealistic, hand drawn, blurry, out of focus, low quality, ugly, watermark, text, low poly, ',
+    cinematic: 'anime, cartoon, 2d, manga, 3d render, cgi, blurry, out of focus, low quality, ugly, watermark, text, cheap, home video, ',
   };
 
   // 拼接提示词
   let fullPrompt = prompt;
-  let styleNegative = '';
+  let fullNegativePrompt = '';
   if (style && styleKeywords[style]) {
     fullPrompt = styleKeywords[style] + prompt;
-    styleNegative = styleNegativeKeywords[style] || '';
+    fullNegativePrompt = styleNegativeKeywords[style] || '';
+  }
+
+  // 加上用户的负面提示词
+  if (negativePrompt) {
+    fullNegativePrompt = fullNegativePrompt + negativePrompt;
   }
 
   // 构建请求体（基础参数）
@@ -50,10 +55,9 @@ export async function generateImage({
     size,
   };
 
-  // 负面提示词（拼到 prompt 后面，避免参数不支持的问题）
-  if (negativePrompt || styleNegative) {
-    const combinedNegative = styleNegative + negativePrompt;
-    requestBody.prompt = `${fullPrompt}。负面提示词：不要${combinedNegative}`;
+  // 负面提示词（用专门的参数）
+  if (fullNegativePrompt) {
+    requestBody.negative_prompt = fullNegativePrompt;
   }
 
   // 图生图模式
@@ -71,12 +75,12 @@ export async function generateImage({
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(120000), // 2 分钟超时
+      signal: AbortSignal.timeout(60000), // 60 秒超时
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`API 请求失败: ${response.status} - ${errorText}`);
+      throw new Error(`API error ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
@@ -93,15 +97,8 @@ export async function generateImage({
     }
   } catch (error) {
     console.error('Agnes Image API 错误:', error);
-    // 降级到模拟模式
-    console.log('Agnes Image API 失败，降级到模拟模式');
-    const mockResult = await mockGenerateImage({ prompt, size, mode, image });
-    return {
-      ...mockResult,
-      success: true,
-      mode: 'simulation-fallback',
-      error: error.message,
-    };
+    // 直接抛出错误，不降级到模拟模式（方便排查问题）
+    throw error;
   }
 }
 
