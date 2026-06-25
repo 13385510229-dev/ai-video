@@ -48,20 +48,20 @@ function calculateResolution(aspectRatio) {
   }
 }
 
-// 风格关键词映射（加强版，权重更高）
+// 风格关键词映射（优化版，每个关键词都有用）
 const styleKeywords = {
-  realistic: 'photorealistic, hyperrealistic, ultra realistic, real photo, 8k uhd, dslr, high quality, highly detailed, sharp focus, ',
-  anime: 'anime style, manga, 2d animation, japanese anime, vibrant colors, cel shading, anime artwork, ',
-  '3d': '3d render, octane render, CGI, 3d animation, pixar style, disney style, 3d cartoon, ',
-  cinematic: 'cinematic, film grain, movie shot, dramatic lighting, hollywood style, anamorphic lens, cinematic color grading, ',
+  realistic: 'photorealistic, hyperrealistic, ultra realistic, real photo, high quality, highly detailed, sharp focus, intricate details, crisp clear, real person, real human, real skin, skin texture, pores, natural lighting, professional photography, dslr, 8k uhd, ',
+  anime: 'anime style, manga, 2d animation, japanese anime, vibrant colors, cel shading, anime artwork, anime key visual, studio ghibli style, makoto shinkai style, beautiful anime art, high quality anime, highly detailed, sharp focus, clean line art, masterpiece, best quality, ',
+  '3d': '3d render, octane render, CGI, 3d animation, pixar style, disney style, 3d cartoon, unreal engine 5, ray tracing, subsurface scattering, highly detailed 3d, ultra detailed, sharp focus, cinematic lighting, high quality, photorealistic 3d, ',
+  cinematic: 'cinematic, film grain, movie shot, dramatic lighting, hollywood style, anamorphic lens, cinematic color grading, live action, real people, real actors, film photography, arri alexa, shot on film, imax quality, epic, grand, sweeping, highly detailed, sharp focus, ultra realistic, wide shot, establishing shot, ',
 };
 
-// 风格对应的负面提示词（避免生成其他风格）
+// 风格对应的负面提示词（避免生成其他风格 + 避免模糊低质）
 const styleNegativeKeywords = {
-  realistic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, ',
-  anime: 'realistic, photo, 3d render, cgi, photorealistic, hyperrealistic, ',
-  '3d': 'anime, 2d, cartoon, manga, realistic, photo, photorealistic, ',
-  cinematic: '', // 电影感是通用风格，不需要反向
+  realistic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, 3d render, cgi, 3d cartoon, pixar, disney style, stylized, comic, comic book, rendered, 3d, game, video game, game screenshot, plastic, fake, doll, toy, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, ',
+  anime: 'realistic, photo, 3d render, cgi, photorealistic, hyperrealistic, real person, real human, live action, film, movie, photograph, dslr, camera shot, realistic style, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, sketch, line art, unfinished, ',
+  '3d': 'anime, 2d, cartoon, manga, realistic, photo, photorealistic, real person, real human, live action, drawing, painting, illustration, comic, 2d animation, hand drawn, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, low poly, bad topology, texture error, ',
+  cinematic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, 3d render, cgi, pixar, disney, 3d cartoon, stylized, comic, comic book, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, distorted, deformed, ugly, watermark, text, signature, cheap, home video, phone footage, found footage, ',
 };
 
 // 创建视频生成任务
