@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { createOrder, verifyOrder } from '../api';
 import type { Package } from '../types';
@@ -57,6 +57,7 @@ const membershipPackages: MembershipPackage[] = [
 
 const Recharge = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, setUser, refreshUser } = useAuthStore();
   const [selectedPackage, setSelectedPackage] = useState<Package | MembershipPackage | null>(null);
   const [showPayment, setShowPayment] = useState(false);
@@ -65,6 +66,21 @@ const Recharge = () => {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [payUrl, setPayUrl] = useState('');
+  const [paymentMode, setPaymentMode] = useState('manual');
+
+  // 检查 URL 里的成功参数（易支付同步跳转）
+  useEffect(() => {
+    const successParam = searchParams.get('success');
+    const orderParam = searchParams.get('order');
+    
+    if (successParam === '1' && orderParam) {
+      // 支付成功跳转回来，刷新用户信息
+      setSuccess(true);
+      setOrderNo(orderParam);
+      refreshUser();
+    }
+  }, [searchParams, refreshUser]);
 
   // 判断是不是会员套餐
   const isMembershipPackage = (pkg: any): pkg is MembershipPackage => {
@@ -81,6 +97,14 @@ const Recharge = () => {
       const res = await createOrder(selectedPackage.id);
       if (res.data.success) {
         setOrderNo(res.data.order.order_no);
+        setPaymentMode(res.data.paymentMode || 'manual');
+        
+        // 易支付模式，直接跳转到支付页面
+        if (res.data.paymentMode === 'epay' && res.data.payUrl) {
+          window.location.href = res.data.payUrl;
+          return;
+        }
+        
         setShowPayment(true);
       } else {
         setError(res.data.message || '创建订单失败');

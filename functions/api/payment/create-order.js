@@ -1,6 +1,7 @@
 import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { MEMBERSHIP_PLANS } from '../_lib/membership.js';
+import { generateSign } from '../_lib/epay.js';
 
 // 次卡套餐配置
 const creditPackages = [
@@ -41,7 +42,7 @@ export async function onRequestPost(context) {
 
     const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
     const body = await request.json();
-    const { packageId } = body;
+    const { packageId, payType } = body;
 
     // 查找套餐
     const pkg = allPackages.find(p => p.id === packageId);
@@ -71,19 +72,62 @@ export async function onRequestPost(context) {
       return errorResponse('创建订单失败，请稍后重试', 500);
     }
 
-    // 获取收款码
-    const qrCode = env.PAYMENT_QR_CODE || '';
     const paymentMode = env.PAYMENT_MODE || 'manual';
+
+    // 易支付模式
+    if (paymentMode === 'epay') {
+      const epayApiUrl = env.EPAY_API_URL;
+      const epayPid = env.EPAY_PID;
+      const epayKey = env.EPAY_KEY;
+
+      if (!epayApiUrl || !epayPid || !epayKey) {
+        return errorResponse('易支付配置不完整', 500);
+      }
+
+      // 获取请求的域名，用于回调地址
+      const url = new URL(request.url);
+      const baseUrl = `${url.protocol}//${url.host}`;
+
+      // 构造支付参数
+      const payParams = {
+        pid: epayPid,
+        type: payType || 'wxpay', // wxpay 微信，alipay 支付宝
+        out_trade_no: orderNo,
+        notify_url: `${baseUrl}/api/payment/notify`,
+        return_url: `${baseUrl}/recharge?success=1&order=${orderNo}`,
+        name: pkg.name,
+        money: pkg.amount.toFixed(2),
+        sitename: 'AI创意工坊',
+      };
+
+      // 生成签名
+      const sign = generateSign(payParams, epayKey);
+      payParams.sign = sign;
+      payParams.sign_type = 'MD5';
+
+      // 构造支付链接
+      const payUrl = `${epayApiUrl}?${new URLSearchParams(payParams).toString()}`;
+
+      return jsonResponse({
+        success: true,
+        order: order,
+        package: pkg,
+        paymentMode: 'epay',
+        payUrl,
+        payParams,
+      });
+    }
+
+    // 手动支付模式
+    const qrCode = env.PAYMENT_QR_CODE || '';
 
     return jsonResponse({
       success: true,
       order: order,
       package: pkg,
       qrCode,
-      paymentMode,
-      tips: paymentMode === 'manual'
-        ? '请扫码支付，支付完成后联系管理员确认到账'
-        : '请完成支付',
+      paymentMode: 'manual',
+      tips: '请扫码支付，支付完成后联系管理员确认到账',
     });
   } catch (error) {
     console.error('创建订单失败:', error);
