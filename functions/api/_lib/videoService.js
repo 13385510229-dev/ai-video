@@ -159,9 +159,9 @@ export async function createVideoTask(params, env) {
     imageCount: images?.length || 0,
   });
 
-  // 重试 2 次
+  // 重试 1 次（总共 2 次），避免超时太久
   let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetch(`${apiBase}/videos`, {
         method: 'POST',
@@ -170,7 +170,7 @@ export async function createVideoTask(params, env) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(60000), // 60 秒超时
+        signal: AbortSignal.timeout(30000), // 30 秒超时
       });
 
       if (!res.ok) {
