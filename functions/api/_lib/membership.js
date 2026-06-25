@@ -23,15 +23,22 @@ export const MEMBERSHIP_PLANS = {
 };
 
 // 检查并重置每日次数（如果是新的一天）
-export async function checkAndResetDailyCredits(userId, supabase) {
+export async function checkAndResetDailyCredits(userId, { supabaseUrl, serviceKey }) {
   try {
-    // 获取用户信息
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId);
+    // 获取用户信息（用原生 fetch）
+    const userQueryRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=*`, {
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
 
-    if (error || !users?.[0]) {
+    if (!userQueryRes.ok) {
+      return null;
+    }
+
+    const users = await userQueryRes.json();
+    if (!users?.[0]) {
       return null;
     }
 

@@ -35,16 +35,21 @@ export async function onRequestPost(context) {
       return errorResponse('视频描述不能为空');
     }
 
-    // 初始化 Supabase
-    const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+    // 查询用户余额和会员信息（改用原生 fetch，确保稳定）
+    const userQueryRes = await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=balance,daily_credits_used,membership_type,membership_expire_at`, {
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    });
 
-    // 查询用户余额和会员信息
-    const { data: users, error: userError } = await supabase
-      .from('users')
-      .select('balance, daily_credits_used, membership_type, membership_expire_at')
-      .eq('id', userId);
+    if (!userQueryRes.ok) {
+      return errorResponse('查询用户信息失败', 500);
+    }
 
-    if (userError || !users?.[0]) {
+    const users = await userQueryRes.json();
+
+    if (!users?.[0]) {
       return errorResponse('用户不存在', 404);
     }
 
