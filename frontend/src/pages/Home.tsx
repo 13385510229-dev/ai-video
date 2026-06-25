@@ -44,46 +44,13 @@ const Home = () => {
           </p>
 
           {/* 按钮组 */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
+          <div className="flex justify-center">
             <button
               onClick={handleStart}
-              className="px-8 py-4 bg-gray-900 text-white text-sm font-medium tracking-wide rounded-full hover:bg-gray-800 transition-all duration-300 hover:shadow-lg hover:shadow-gray-900/20"
+              className="px-10 py-4 bg-gray-900 text-white text-sm font-medium tracking-wide rounded-full hover:bg-gray-800 transition-all duration-300 hover:shadow-lg hover:shadow-gray-900/20"
             >
               开始创作
             </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="px-8 py-4 border border-gray-200 text-gray-700 text-sm font-medium tracking-wide rounded-full hover:border-gray-300 hover:bg-gray-50 transition-all duration-300"
-            >
-              了解更多
-            </button>
-          </div>
-
-          {/* 特性标签 */}
-          <div className="flex flex-wrap items-center justify-center gap-6 mb-16 text-xs text-gray-400 font-medium tracking-wider uppercase">
-            <span>✨ 视频生成</span>
-            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-            <span>🖼️ 图片生成</span>
-            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-            <span>⚡ 快速出图</span>
-            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-            <span>🎨 多种风格</span>
-          </div>
-
-          {/* 统计数据 */}
-          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto pt-12 border-t border-gray-100">
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">320+</div>
-              <div className="text-xs text-gray-400 tracking-wider uppercase">已生成作品</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">8s</div>
-              <div className="text-xs text-gray-400 tracking-wider uppercase">平均生成时间</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">120+</div>
-              <div className="text-xs text-gray-400 tracking-wider uppercase">活跃用户</div>
-            </div>
           </div>
         </div>
       </div>
