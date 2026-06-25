@@ -102,23 +102,23 @@ const History = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 animate-fade-in">
-      <div className="mb-8 animate-slide-up">
-        <h1 className="text-3xl font-bold mb-2 text-white">历史记录</h1>
-        <p className="text-gray-400">共 {videos.length} 个视频</p>
+      <div className="mb-12 animate-slide-up text-center">
+        <h1 className="text-5xl font-bold mb-4 text-gray-900 tracking-tight">历史记录</h1>
+        <p className="text-gray-500 text-lg">共 {videos.length} 个视频</p>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm animate-shake">
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm animate-shake">
           {error}
         </div>
       )}
 
       {videos.length === 0 ? (
-        <div className="card text-center py-16">
-          <p className="text-gray-400 mb-6">还没有生成过视频</p>
+        <div className="bg-white border border-gray-200 rounded-2xl text-center py-20 shadow-sm">
+          <p className="text-gray-500 mb-6 text-lg">还没有生成过视频</p>
           <button
-            onClick={() => window.location.href = '/'}
-            className="btn btn-primary"
+            onClick={() => window.location.href = '/video'}
+            className="px-8 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5"
           >
             去生成第一个视频
           </button>
@@ -128,11 +128,11 @@ const History = () => {
           {videos.map((video, index) => (
             <div
               key={video.id}
-              className="card overflow-hidden animate-slide-up card-shine"
+              className="bg-white border border-gray-200 rounded-2xl overflow-hidden animate-slide-up shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1"
               style={{ animationDelay: `${index * 0.05}s` }}
             >
               {/* 视频预览 */}
-              <div className="relative aspect-video bg-gray-900 rounded-lg mb-4 overflow-hidden">
+              <div className="relative aspect-video bg-gray-100 overflow-hidden">
                 {video.status === 'succeeded' && video.video_url ? (
                   <video
                     src={video.video_url}
@@ -144,17 +144,17 @@ const History = () => {
                   <div className="w-full h-full flex flex-col items-center justify-center">
                     {video.status === 'failed' ? (
                       <>
-                        <p className="text-red-400 text-sm">生成失败</p>
+                        <p className="text-red-500 text-sm">生成失败</p>
                         {video.error_message && (
-                          <p className="text-gray-500 text-xs mt-1 px-4 text-center">
+                          <p className="text-gray-400 text-xs mt-1 px-4 text-center">
                             {video.error_message}
                           </p>
                         )}
                       </>
                     ) : (
                       <>
-                        <div className="spinner mb-3" style={{ width: '28px', height: '28px' }} />
-                        <p className="text-gray-400 text-sm">{getStatusText(video.status)}</p>
+                        <div className="w-7 h-7 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mb-3" />
+                        <p className="text-gray-500 text-sm">{getStatusText(video.status)}</p>
                       </>
                     )}
                   </div>
@@ -162,11 +162,11 @@ const History = () => {
               </div>
 
               {/* 视频信息 */}
-              <div className="mb-3">
-                <p className="text-sm text-gray-300 line-clamp-2 mb-2">
+              <div className="p-4">
+                <p className="text-sm text-gray-700 line-clamp-2 mb-3">
                   {video.prompt}
                 </p>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
+                <div className="flex items-center gap-3 text-xs text-gray-400">
                   <span>{video.duration}秒</span>
                   <span>·</span>
                   <span>{video.aspect_ratio}</span>
@@ -178,14 +178,14 @@ const History = () => {
               </div>
 
               {/* 操作 */}
-              <div className="flex items-center justify-between pt-3 border-t border-gray-800">
-                <span className="text-xs text-gray-500">
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+                <span className="text-xs text-gray-400">
                   {new Date(video.created_at).toLocaleString('zh-CN')}
                 </span>
                 <button
                   onClick={() => handleDelete(video.id)}
                   disabled={deletingId === video.id}
-                  className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
                 >
                   {deletingId === video.id ? '删除中...' : '删除'}
                 </button>

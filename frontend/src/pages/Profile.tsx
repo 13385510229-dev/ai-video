@@ -63,21 +63,18 @@ const Profile = () => {
             to="/"
             className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
           >
-            <div className="text-2xl mb-1">🎬</div>
             <span className="text-sm">生成视频</span>
           </Link>
           <Link
             to="/history"
             className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
           >
-            <div className="text-2xl mb-1">📁</div>
             <span className="text-sm">历史记录</span>
           </Link>
           <Link
             to="/recharge"
             className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
           >
-            <div className="text-2xl mb-1">💎</div>
             <span className="text-sm">充值次数</span>
           </Link>
           <button
@@ -85,14 +82,12 @@ const Profile = () => {
             disabled={exporting}
             className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
           >
-            <div className="text-2xl mb-1">📥</div>
             <span className="text-sm">{exporting ? '导出中...' : '导出数据'}</span>
           </button>
           <button
             onClick={logout}
             className="p-4 bg-gray-800/50 rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-colors text-center"
           >
-            <div className="text-2xl mb-1">🚪</div>
             <span className="text-sm">退出登录</span>
           </button>
         </div>

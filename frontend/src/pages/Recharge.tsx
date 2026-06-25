@@ -106,7 +106,7 @@ const Recharge = () => {
           {success ? (
             <div className="mb-6">
               <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 mb-4">
-                <div className="text-xl font-bold mb-2">🎉 支付成功！</div>
+                <div className="text-xl font-bold mb-2">支付成功！</div>
                 <div className="text-sm">已充值 {selectedPackage?.credits} 次，当前余额：{user?.balance || 0} 次</div>
               </div>
               <button
@@ -153,7 +153,7 @@ const Recharge = () => {
 
           <div className="mt-6 pt-6 border-t border-gray-800">
             <p className="text-xs text-gray-500">
-              💡 手动支付说明：扫码付款后，请联系管理员确认到账，或点击上方按钮查询
+              手动支付说明：扫码付款后，请联系管理员确认到账，或点击上方按钮查询
             </p>
           </div>
         </div>
@@ -163,35 +163,35 @@ const Recharge = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12 animate-fade-in">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-3">充值套餐</h1>
-        <p className="text-gray-400">选择适合你的套餐，开始创作</p>
+      <div className="text-center mb-16">
+        <h1 className="text-5xl font-bold mb-4 text-gray-900 tracking-tight">充值套餐</h1>
+        <p className="text-gray-500 text-lg">选择适合你的套餐，开始创作</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
         {packages.map((pkg, index) => (
           <div
             key={pkg.id}
             onClick={() => setSelectedPackage(pkg)}
-            className={`card cursor-pointer transition-all hover:scale-105 animate-slide-up ${
+            className={`cursor-pointer transition-all hover:-translate-y-2 animate-slide-up rounded-2xl p-8 border-2 ${
               selectedPackage?.id === pkg.id
-                ? 'border-white bg-gray-900'
-                : 'border-gray-800 hover:border-gray-600'
+                ? 'border-gray-900 bg-gray-50 shadow-xl'
+                : 'border-gray-200 bg-white hover:border-gray-300 shadow-sm hover:shadow-md'
             }`}
             style={{ animationDelay: `${index * 0.1}s` }}
           >
             <div className="text-center">
-              <h3 className="text-xl font-semibold mb-2">{pkg.name}</h3>
-              <div className="text-4xl font-bold mb-2">
+              <h3 className="text-xl font-semibold mb-4 text-gray-900">{pkg.name}</h3>
+              <div className="text-5xl font-bold mb-4 text-gray-900">
                 ¥{pkg.amount}
               </div>
-              <p className="text-gray-400 mb-6">
+              <p className="text-gray-500 mb-6">
                 共 {pkg.credits} 次生成机会
               </p>
-              <div className="text-sm text-gray-500 space-y-1">
-                <p>✓ 高清视频生成</p>
-                <p>✓ 多种风格可选</p>
-                <p>✓ 永久保存</p>
+              <div className="text-sm text-gray-500 space-y-2">
+                <p>高清视频生成</p>
+                <p>多种风格可选</p>
+                <p>永久保存</p>
               </div>
             </div>
           </div>
@@ -199,7 +199,7 @@ const Recharge = () => {
       </div>
 
       {error && (
-        <div className="max-w-md mx-auto mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-center">
+        <div className="max-w-md mx-auto mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-center">
           {error}
         </div>
       )}
@@ -208,14 +208,14 @@ const Recharge = () => {
         <button
           onClick={handleCreateOrder}
           disabled={loading || !selectedPackage}
-          className="btn btn-primary text-lg px-12 py-4"
+          className="px-12 py-4 bg-gray-900 text-white rounded-lg font-medium text-lg hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
         >
           {loading ? '处理中...' : '立即充值'}
         </button>
       </div>
 
-      <div className="mt-12 text-center text-sm text-gray-500">
-        <p>⚠️ 虚拟商品，一经充值不支持退款</p>
+      <div className="mt-12 text-center text-sm text-gray-400">
+        <p>虚拟商品，一经充值不支持退款</p>
         <p className="mt-1">如有问题请联系客服</p>
       </div>
     </div>

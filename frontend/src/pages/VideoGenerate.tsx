@@ -194,18 +194,18 @@ const VideoGenerate = () => {
   return (
     <div className="max-w-4xl mx-auto px-6 py-12 animate-fade-in">
       <div className="text-center mb-12 animate-slide-up">
-        <h1 className="text-5xl font-bold mb-4 tracking-tight text-white">
+        <h1 className="text-5xl font-bold mb-4 tracking-tight text-gray-900">
           AI 视频生成
         </h1>
-        <p className="text-gray-400 text-lg">
+        <p className="text-gray-500 text-lg">
           输入文字描述，一键生成专业级视频
         </p>
       </div>
 
-      <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
+      <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up" style={{ animationDelay: '0.1s' }}>
         {/* 生成模式 */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-3">
+        <div className="mb-8">
+          <label className="block text-sm font-medium mb-3 text-gray-700">
             生成模式
           </label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -213,14 +213,14 @@ const VideoGenerate = () => {
               <button
                 key={m.value}
                 onClick={() => setMode(m.value)}
-                className={`p-3 rounded-lg border text-left transition-all duration-300 ${
+                className={`p-4 rounded-xl border text-left transition-all duration-300 ${
                   mode === m.value
-                    ? 'border-white/50 bg-white/5 shadow-lg shadow-white/10'
-                    : 'border-gray-700 hover:border-gray-500 hover:bg-gray-800/50'
+                    ? 'border-gray-900 bg-gray-50 shadow-md'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                <div className="font-medium text-sm">{m.label}</div>
-                <div className="text-xs text-gray-400 mt-1">{m.description}</div>
+                <div className="font-medium text-sm text-gray-900">{m.label}</div>
+                <div className="text-xs text-gray-500 mt-1">{m.description}</div>
               </button>
             ))}
           </div>
@@ -228,11 +228,11 @@ const VideoGenerate = () => {
 
         {/* 图生视频 - 单图 */}
         {mode === 'i2v' && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">
+          <div className="mb-8">
+            <label className="block text-sm font-medium mb-2 text-gray-700">
               参考图片 <span className="text-red-500">*</span>
             </label>
-            <div className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-gray-500 transition-colors">
+            <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-gray-400 transition-colors bg-gray-50/50">
               <input
                 type="file"
                 accept="image/*"
@@ -243,41 +243,41 @@ const VideoGenerate = () => {
               <label htmlFor="single-image-upload" className="cursor-pointer">
                 {singleFile ? (
                   <div>
-                    <p className="text-white font-medium">{singleFile.name}</p>
-                    <p className="text-xs text-gray-400 mt-1">点击重新选择</p>
+                    <p className="text-gray-900 font-medium">{singleFile.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">点击重新选择</p>
                   </div>
                 ) : (
                   <div>
-                    <p className="text-gray-400">点击选择图片，或拖拽到这里</p>
-                    <p className="text-xs text-gray-500 mt-1">支持 JPG、PNG、WebP 等格式</p>
+                    <p className="text-gray-500">点击选择图片，或拖拽到这里</p>
+                    <p className="text-xs text-gray-400 mt-1">支持 JPG、PNG、WebP 等格式</p>
                   </div>
                 )}
               </label>
             </div>
             {singleImageBase64 && (
-              <div className="mt-3">
+              <div className="mt-4">
                 <img
                   src={singleImageBase64}
                   alt="预览"
-                  className="max-h-48 mx-auto rounded-lg"
+                  className="max-h-48 mx-auto rounded-xl shadow-md"
                 />
               </div>
             )}
-            <p className="text-xs text-gray-500 mt-3">
-              💡 建议图片大小不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器，每次生成都需重新上传。
+            <p className="text-xs text-gray-400 mt-3">
+              建议图片大小不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器，每次生成都需重新上传。
             </p>
           </div>
         )}
 
         {/* 多图/关键帧 - 多图 */}
         {(mode === 'multi-image' || mode === 'keyframes') && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">
+          <div className="mb-8">
+            <label className="block text-sm font-medium mb-2 text-gray-700">
               参考图片 <span className="text-red-500">*</span>
             </label>
             <div className="space-y-3">
               {multipleFiles.map((file, index) => (
-                <div key={index} className="border-2 border-dashed border-gray-700 rounded-lg p-4 hover:border-gray-500 transition-colors">
+                <div key={index} className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-gray-400 transition-colors bg-gray-50/50">
                   <input
                     type="file"
                     accept="image/*"
@@ -291,16 +291,16 @@ const VideoGenerate = () => {
                         <img
                           src={multipleImageBase64s[index]}
                           alt={`图片 ${index + 1}`}
-                          className="w-16 h-16 object-cover rounded"
+                          className="w-16 h-16 object-cover rounded-lg"
                         />
                         <div>
-                          <p className="text-white font-medium text-sm">{file.name}</p>
-                          <p className="text-xs text-gray-400">点击重新选择</p>
+                          <p className="text-gray-900 font-medium text-sm">{file.name}</p>
+                          <p className="text-xs text-gray-500">点击重新选择</p>
                         </div>
                       </div>
                     ) : (
                       <div className="text-center py-2">
-                        <p className="text-gray-400 text-sm">图片 {index + 1}：点击选择</p>
+                        <p className="text-gray-500 text-sm">图片 {index + 1}：点击选择</p>
                       </div>
                     )}
                   </label>
@@ -309,22 +309,22 @@ const VideoGenerate = () => {
             </div>
             <button
               onClick={addMoreImages}
-              className="mt-3 text-sm text-gray-400 hover:text-white transition-colors"
+              className="mt-3 text-sm text-gray-500 hover:text-gray-700 transition-colors"
             >
               + 添加更多图片
             </button>
-            <p className="text-xs text-gray-500 mt-2">
-              💡 {mode === 'keyframes' ? '关键帧模式：按顺序排列，第一张为起始帧，最后一张为结束帧' : '多图模式：上传多张参考图片引导视频生成'}
+            <p className="text-xs text-gray-400 mt-2">
+              {mode === 'keyframes' ? '关键帧模式：按顺序排列，第一张为起始帧，最后一张为结束帧' : '多图模式：上传多张参考图片引导视频生成'}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
-              ⚠️ 建议单张图片不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器。
+            <p className="text-xs text-gray-400 mt-1">
+              建议单张图片不超过 5MB，支持 JPG、PNG、WebP 格式。图片不会保存在服务器。
             </p>
           </div>
         )}
 
         {/* 视频描述 */}
         <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium mb-2 text-gray-700">
             视频描述 <span className="text-red-500">*</span>
           </label>
           <textarea
@@ -335,13 +335,13 @@ const VideoGenerate = () => {
               : '描述画面的运动和变化，保持主体稳定...'
             }
             rows={4}
-            className="w-full resize-none"
+            className="w-full resize-none bg-white border border-gray-200 text-gray-900 rounded-xl p-4 focus:border-gray-400 focus:ring-2 focus:ring-gray-100 outline-none transition-all"
           />
         </div>
 
         {/* 负面提示词 */}
         <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium mb-2 text-gray-700">
             负面提示词（可选）
           </label>
           <textarea
@@ -349,20 +349,20 @@ const VideoGenerate = () => {
             onChange={(e) => setNegativePrompt(e.target.value)}
             placeholder="描述你不想要出现在视频中的内容..."
             rows={2}
-            className="w-full resize-none"
+            className="w-full resize-none bg-white border border-gray-200 text-gray-900 rounded-xl p-4 focus:border-gray-400 focus:ring-2 focus:ring-gray-100 outline-none transition-all"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* 风格 */}
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2 text-gray-700">
               视频风格
             </label>
             <select
               value={style}
               onChange={(e) => setStyle(e.target.value)}
-              className="w-full"
+              className="w-full bg-white border border-gray-200 text-gray-900 rounded-xl p-3 focus:border-gray-400 focus:ring-2 focus:ring-gray-100 outline-none transition-all"
             >
               {VIDEO_STYLES.map((s) => (
                 <option key={s.value} value={s.value}>
@@ -374,13 +374,13 @@ const VideoGenerate = () => {
 
           {/* 时长 */}
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2 text-gray-700">
               视频时长
             </label>
             <select
               value={duration}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full"
+              className="w-full bg-white border border-gray-200 text-gray-900 rounded-xl p-3 focus:border-gray-400 focus:ring-2 focus:ring-gray-100 outline-none transition-all"
             >
               {VIDEO_DURATIONS.map((d) => (
                 <option key={d.value} value={d.value}>
@@ -392,13 +392,13 @@ const VideoGenerate = () => {
 
           {/* 比例 */}
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2 text-gray-700">
               画面比例
             </label>
             <select
               value={aspectRatio}
               onChange={(e) => setAspectRatio(e.target.value)}
-              className="w-full"
+              className="w-full bg-white border border-gray-200 text-gray-900 rounded-xl p-3 focus:border-gray-400 focus:ring-2 focus:ring-gray-100 outline-none transition-all"
             >
               {ASPECT_RATIOS.map((a) => (
                 <option key={a.value} value={a.value}>
@@ -410,25 +410,25 @@ const VideoGenerate = () => {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
             {error}
           </div>
         )}
 
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-400">
-            本次消耗 <span className="text-white font-medium">{currentCost}</span> 次
+          <div className="text-sm text-gray-500">
+            本次消耗 <span className="text-gray-900 font-medium">{currentCost}</span> 次
             <span className="mx-2">·</span>
-            剩余 <span className="text-white font-medium">{user?.balance || 0}</span> 次
+            剩余 <span className="text-gray-900 font-medium">{user?.balance || 0}</span> 次
           </div>
           <button
             onClick={handleGenerate}
             disabled={loading || !prompt.trim()}
-            className="btn btn-primary flex items-center gap-2"
+            className="px-8 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2"
           >
             {loading ? (
               <>
-                <div className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 生成中...
               </>
             ) : (
@@ -439,8 +439,8 @@ const VideoGenerate = () => {
       </div>
 
       {/* 提示信息 */}
-      <div className="mt-8 text-center text-sm text-gray-500 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-        <p>💡 提示：视频生成大约需要 5~10 分钟，请耐心等待</p>
+      <div className="mt-8 text-center text-sm text-gray-400 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+        <p>提示：视频生成大约需要 5~10 分钟，请耐心等待</p>
         <p className="mt-1">生成过程中可以关闭页面，稍后在历史记录中查看结果</p>
       </div>
     </div>

@@ -267,3 +267,112 @@ html {
     transform: rotate(360deg);
   }
 }
+
+/* ========== 浅色主题样式 ========== */
+.light-theme {
+  background-color: #ffffff;
+  color: #111111;
+}
+
+.light-theme::before {
+  display: none;
+}
+
+/* 浅色主题滚动条 */
+.light-theme ::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+.light-theme ::-webkit-scrollbar-thumb {
+  background: #d1d1d1;
+}
+
+.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: #b0b0b0;
+}
+
+/* 浅色主题输入框 */
+.light-theme input,
+.light-theme textarea,
+.light-theme select {
+  background-color: #ffffff;
+  border: 1px solid #e5e5e5;
+  color: #111111;
+}
+
+.light-theme input:focus,
+.light-theme textarea:focus,
+.light-theme select:focus {
+  border-color: #111111;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05), 0 0 15px rgba(0, 0, 0, 0.05);
+}
+
+.light-theme input::placeholder,
+.light-theme textarea::placeholder {
+  color: #999999;
+}
+
+/* 浅色主题按钮 */
+.light-theme .btn-primary {
+  background: #111111;
+  color: #ffffff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .btn-primary:hover {
+  background: #000000;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.light-theme .btn-secondary {
+  background-color: #f5f5f5;
+  color: #111111;
+  border: 1px solid #e5e5e5;
+}
+
+.light-theme .btn-secondary:hover {
+  background-color: #eeeeee;
+}
+
+/* 浅色主题卡片 */
+.light-theme .card {
+  background-color: #ffffff;
+  border: 1px solid #e5e5e5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.light-theme .card:hover {
+  border-color: #cccccc;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+/* 浅色主题渐变边框 */
+.light-theme .gradient-border {
+  background: #ffffff;
+}
+
+.light-theme .gradient-border::before {
+  background: linear-gradient(135deg, #111111, #888888, #111111);
+}
+
+/* 浅色主题骨架屏 */
+.light-theme .skeleton {
+  background: linear-gradient(90deg, #f5f5f5 25%, #e8e8e8 50%, #f5f5f5 75%);
+  background-size: 200px 100%;
+}
+
+/* 浅色主题卡片光扫效果 */
+.light-theme .card-shine::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 0, 0, 0.03),
+    transparent
+  );
+}
+
+/* 浅色主题加载动画 */
+.light-theme .spinner {
+  border-color: #e5e5e5;
+  border-top-color: #111111;
+}

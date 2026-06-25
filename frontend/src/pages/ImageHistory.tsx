@@ -86,7 +86,7 @@ export default function ImageHistory() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 animate-slide-up" style={{ animationDelay: `${i * 0.05}s` }}>
+            <div key={i} className="bg-white rounded-xl overflow-hidden border border-gray-200 animate-slide-up" style={{ animationDelay: `${i * 0.05}s` }}>
               <div className="skeleton aspect-video"></div>
               <div className="p-4">
                 <div className="skeleton h-4 w-full mb-2"></div>
@@ -105,7 +105,7 @@ export default function ImageHistory() {
         <p className="text-red-400 mb-4">{error}</p>
         <button
           onClick={fetchImages}
-          className="px-6 py-2 bg-white text-black rounded-lg hover:bg-gray-200 transition-colors"
+          className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors"
         >
           重试
         </button>
@@ -114,16 +114,14 @@ export default function ImageHistory() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto animate-fade-in">
+    <div className="max-w-7xl mx-auto px-6 py-12 animate-fade-in">
       {/* 标题 */}
-      <div className="flex items-center justify-between mb-8 animate-slide-up">
-        <div>
-          <h1 className="text-3xl font-bold mb-2 text-white">图片历史</h1>
-          <p className="text-gray-500">共 {images.length} 张图片</p>
-        </div>
+      <div className="text-center mb-12 animate-slide-up">
+        <h1 className="text-5xl font-bold mb-4 text-gray-900 tracking-tight">图片历史</h1>
+        <p className="text-gray-500 text-lg mb-6">共 {images.length} 张图片</p>
         <Link
           to="/image-generate"
-          className="btn btn-primary"
+          className="inline-block px-8 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5"
         >
           + 生成新图片
         </Link>
@@ -131,12 +129,12 @@ export default function ImageHistory() {
 
       {/* 图片列表 */}
       {images.length === 0 ? (
-        <div className="text-center py-20 bg-[#121212] rounded-2xl border border-gray-800 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-          <h3 className="text-xl font-medium mb-2">还没有图片</h3>
+        <div className="text-center py-20 bg-white rounded-2xl border border-gray-200 shadow-sm animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          <h3 className="text-xl font-medium mb-2 text-gray-900">还没有图片</h3>
           <p className="text-gray-500 mb-6">开始生成你的第一张 AI 图片吧</p>
           <Link
             to="/image-generate"
-            className="btn btn-primary"
+            className="inline-block px-8 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5"
           >
             立即生成
           </Link>
@@ -146,11 +144,11 @@ export default function ImageHistory() {
           {images.map((image, index) => (
             <div
               key={image.id}
-              className="bg-[#121212] rounded-xl overflow-hidden border border-gray-800 hover:border-white/30 hover:shadow-lg hover:shadow-white/5 transition-all duration-300 group animate-slide-up card-shine"
+              className="bg-white rounded-2xl overflow-hidden border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 group animate-slide-up shadow-sm hover:-translate-y-1"
               style={{ animationDelay: `${index * 0.05}s` }}
             >
               {/* 图片预览 */}
-              <div className="relative aspect-video bg-black overflow-hidden">
+              <div className="relative aspect-video bg-gray-100 overflow-hidden">
                 {image.status === 'succeeded' && image.image_url ? (
                   <img
                     src={image.image_url}
@@ -160,14 +158,14 @@ export default function ImageHistory() {
                 ) : image.status === 'failed' ? (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-red-400 text-sm">生成失败</p>
+                      <p className="text-red-500 text-sm">生成失败</p>
                     </div>
                   </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white/50 mx-auto mb-3"></div>
-                      <p className="text-gray-400 text-sm">生成中...</p>
+                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-gray-400 mx-auto mb-3"></div>
+                      <p className="text-gray-500 text-sm">生成中...</p>
                     </div>
                   </div>
                 )}
@@ -200,16 +198,16 @@ export default function ImageHistory() {
 
               {/* 图片信息 */}
               <div className="p-4">
-                <p className="text-sm text-gray-300 line-clamp-2 mb-3 h-10">
+                <p className="text-sm text-gray-700 line-clamp-2 mb-3 h-10">
                   {image.prompt}
                 </p>
-                <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center justify-between text-xs text-gray-400">
                   <span>{formatDate(image.created_at)}</span>
                   <div className="flex items-center gap-2">
                     <span>{image.size}</span>
                     <button
                       onClick={() => handleDelete(image.id)}
-                      className="text-gray-500 hover:text-red-400 transition-colors"
+                      className="text-gray-400 hover:text-red-500 transition-colors"
                       title="删除"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
