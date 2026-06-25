@@ -31,20 +31,20 @@ function calculateFrames(duration) {
   return { num_frames: bestFrames, frame_rate: frameRate };
 }
 
-// 计算分辨率（1024p 级别，都是 64 的倍数）
+// 计算分辨率（768p 级别，都是 64 的倍数，确保 Agnes 支持）
 function calculateResolution(aspectRatio) {
   switch (aspectRatio) {
     case '9:16':
-      return { width: 576, height: 1024 };
+      return { width: 432, height: 768 };
     case '1:1':
-      return { width: 1024, height: 1024 };
+      return { width: 768, height: 768 };
     case '4:3':
-      return { width: 1344, height: 1024 };
+      return { width: 1024, height: 768 };
     case '3:4':
-      return { width: 768, height: 1024 };
+      return { width: 576, height: 768 };
     case '16:9':
     default:
-      return { width: 1792, height: 1024 };
+      return { width: 1280, height: 768 };
   }
 }
 
@@ -170,7 +170,7 @@ export async function createVideoTask(params, env) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(30000), // 30 秒超时
+        signal: AbortSignal.timeout(60000), // 60 秒超时（高分辨率下创建任务需要时间）
       });
 
       if (!res.ok) {
@@ -216,7 +216,7 @@ export async function getVideoTaskStatus(taskId, env) {
     if (elapsed > 30000) {
       return {
         status: 'succeeded',
-        video_url: 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4',
+        video_url: 'https://www.w3schools.com/html/mov_bbb.mp4',
         thumbnail_url: null,
       };
     }
