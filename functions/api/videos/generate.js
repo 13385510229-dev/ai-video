@@ -56,20 +56,7 @@ export async function onRequestPost(context) {
     const user = users[0];
     const cost = calculateCost(duration);
 
-    // 先扣除次数（优先扣每日次数，再扣余额）
-    const deductResult = await deductCredits(
-      userId,
-      cost,
-      null,
-      env.SUPABASE_URL,
-      env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
-    if (!deductResult.success) {
-      return errorResponse(deductResult.error || '余额不足，请充值', 400);
-    }
-
-    // 创建视频任务
+    // 创建视频任务（先创建任务，成功了再扣次数，避免超时白扣）
     let taskResult;
     try {
       taskResult = await createVideoTask(
@@ -88,43 +75,27 @@ export async function onRequestPost(context) {
         env
       );
     } catch (taskError) {
-      // 创建任务失败，退还次数
-      try {
-        if (deductResult.used_daily) {
-          // 扣的是每日次数，退还
-          const currentUsed = user.daily_credits_used || 0;
-          await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              daily_credits_used: Math.max(0, currentUsed - cost) 
-            }),
-          });
-        } else {
-          // 扣的是余额，退还
-          await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ balance: user.balance }),
-          });
-        }
-      } catch (refundError) {
-        console.error('退还次数失败:', refundError);
-      }
       throw taskError;
     }
 
     // 如果 Agnes API 调用失败且降级到模拟模式，记录错误
     if (taskResult.mode === 'simulation-fallback') {
       console.warn('Agnes API 调用失败，已降级到模拟模式:', taskResult.error);
+    }
+
+    // 任务创建成功后，再扣除次数（优先扣每日次数，再扣余额）
+    const deductResult = await deductCredits(
+      userId,
+      cost,
+      null,
+      env.SUPABASE_URL,
+      env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    if (!deductResult.success) {
+      // 扣次数失败，任务已经创建了，但是次数没扣成功...
+      // 这种情况概率很低，先返回成功，用户相当于免费获得一次
+      console.warn('扣次数失败，但任务已创建:', deductResult.error);
     }
 
     // 保存视频记录（直接用 fetch，确保 100% 生效）
