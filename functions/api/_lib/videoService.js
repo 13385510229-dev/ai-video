@@ -56,12 +56,12 @@ const styleKeywords = {
   cinematic: 'cinematic, film grain, dramatic lighting, cinematic color grading, live action, real people, shot on film, highly detailed, sharp focus, ',
 };
 
-// 风格对应的负面提示词（精简版）
+// 风格对应的负面提示词（精简版 + 避免畸形扭曲）
 const styleNegativeKeywords = {
-  realistic: 'anime, cartoon, 2d, manga, 3d render, cgi, game, plastic, fake, blurry, out of focus, low quality, ugly, watermark, text, ',
-  anime: 'realistic, photo, 3d render, cgi, photorealistic, live action, blurry, out of focus, low quality, ugly, watermark, text, sketch, ',
-  '3d': 'anime, 2d, cartoon, realistic, photo, photorealistic, hand drawn, blurry, out of focus, low quality, ugly, watermark, text, low poly, ',
-  cinematic: 'anime, cartoon, 2d, manga, 3d render, cgi, blurry, out of focus, low quality, ugly, watermark, text, cheap, home video, ',
+  realistic: 'anime, cartoon, 2d, manga, 3d render, cgi, game, plastic, fake, blurry, out of focus, low quality, ugly, watermark, text, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
+  anime: 'realistic, photo, 3d render, cgi, photorealistic, live action, blurry, out of focus, low quality, ugly, watermark, text, sketch, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
+  '3d': 'anime, 2d, cartoon, realistic, photo, photorealistic, hand drawn, blurry, out of focus, low quality, ugly, watermark, text, low poly, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
+  cinematic: 'anime, cartoon, 2d, manga, 3d render, cgi, blurry, out of focus, low quality, ugly, watermark, text, cheap, home video, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
 };
 
 // 创建视频生成任务

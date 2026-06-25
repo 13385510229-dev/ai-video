@@ -75,85 +75,97 @@ export async function onRequestPost(context) {
       return new Response('fail', { status: 400 });
     }
 
-    // 第二步：尝试更新订单状态（只有 pending 状态的才会更新成功）
-    // 用乐观锁防止并发重复处理
-    const orderUpdateRes = await fetch(`${supabaseUrl}/rest/v1/orders?id=eq.${order.id}&status=eq.pending`, {
-      method: 'PATCH',
-      headers: {
-        'apikey': serviceKey,
-        'Authorization': `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      },
-      body: JSON.stringify({
-        status: 'paid',
-        paid_at: new Date().toISOString(),
-        trade_no: tradeNo,
-      }),
-    });
-
-    if (!orderUpdateRes.ok) {
-      const err = await orderUpdateRes.json().catch(() => ({}));
-      console.error('更新订单状态失败:', err);
-      return new Response('fail', { status: 500 });
-    }
-
-    const updatedOrders = await orderUpdateRes.json();
-    
-    // 如果没有更新到任何行，说明并发情况下已经被其他请求处理了
-    if (!updatedOrders || updatedOrders.length === 0) {
-      console.log('订单已被其他请求处理:', orderNo);
-      return new Response('success');
-    }
-
-    // 第三步：处理订单（加次数或开通会员）
+    // 第二步：处理订单（先加次数，再更新订单状态，确保用户不会亏）
     const credits = order.credits || 0;
     
     if (credits > 0) {
-      // 次卡：给用户加次数
-      // 先查当前余额
-      const userQueryRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${order.user_id}&select=balance`, {
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-        },
-      });
+      // 次卡：给用户加次数（带乐观锁，防止重复加）
+      let addSuccess = false;
+      
+      // 最多重试 3 次
+      for (let attempt = 0; attempt < 3; attempt++) {
+        // 先查当前余额
+        const userQueryRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${order.user_id}&select=balance`, {
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+          },
+        });
 
-      if (!userQueryRes.ok) {
-        console.error('查询用户失败');
+        if (!userQueryRes.ok) {
+          console.error('查询用户失败，重试:', attempt);
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+
+        const users = await userQueryRes.json();
+        if (!users?.[0]) {
+          console.error('用户不存在:', order.user_id);
+          return new Response('fail', { status: 404 });
+        }
+
+        const currentBalance = users[0].balance || 0;
+        const newBalance = currentBalance + credits;
+
+        // 更新余额（乐观锁：只有当前余额等于查询到的余额时才更新）
+        const balanceUpdateRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${order.user_id}&balance=eq.${currentBalance}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify({ balance: newBalance }),
+        });
+
+        if (!balanceUpdateRes.ok) {
+          const err = await balanceUpdateRes.json().catch(() => ({}));
+          console.error('更新用户余额失败，重试:', attempt, err);
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+
+        const updatedUsers = await balanceUpdateRes.json();
+        
+        if (updatedUsers && updatedUsers.length > 0) {
+          // 更新成功
+          addSuccess = true;
+          console.log('充值成功:', orderNo, credits, '次，新余额:', newBalance);
+          break;
+        } else {
+          // 乐观锁冲突，说明其他请求已经修改了余额，重试
+          console.log('乐观锁冲突，重试:', attempt);
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+      
+      if (!addSuccess) {
+        console.error('加次数失败，3 次重试都失败了');
         return new Response('fail', { status: 500 });
       }
-
-      const users = await userQueryRes.json();
-      if (!users?.[0]) {
-        console.error('用户不存在:', order.user_id);
-        return new Response('fail', { status: 404 });
+      
+      // 加次数成功后，再更新订单状态（即使更新失败也没关系，用户已经拿到次数了）
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/orders?id=eq.${order.id}&status=eq.pending`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+            trade_no: tradeNo,
+          }),
+        });
+      } catch (e) {
+        console.warn('更新订单状态失败，但用户已经拿到次数了:', e.message);
       }
-
-      const currentBalance = users[0].balance || 0;
-      const newBalance = currentBalance + credits;
-
-      // 更新余额
-      const balanceUpdateRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${order.user_id}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ balance: newBalance }),
-      });
-
-      if (!balanceUpdateRes.ok) {
-        const err = await balanceUpdateRes.json().catch(() => ({}));
-        console.error('更新用户余额失败:', err);
-        return new Response('fail', { status: 500 });
-      }
-
-      console.log('充值成功:', orderNo, credits, '次，新余额:', newBalance);
+      
     } else {
-      // 会员：开通会员
-      // 根据金额判断会员类型
+      // 会员：开通会员（带重试）
       const amount = parseFloat(order.amount);
       let planType = 'monthly';
       
@@ -161,19 +173,53 @@ export async function onRequestPost(context) {
       else if (Math.abs(amount - 99) < 0.01) planType = 'quarterly';
       else if (Math.abs(amount - 299) < 0.01) planType = 'yearly';
 
-      const result = await activateMembership(
-        order.user_id,
-        planType,
-        supabaseUrl,
-        serviceKey
-      );
+      let activateSuccess = false;
+      let activateResult = null;
+      
+      // 最多重试 3 次
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const result = await activateMembership(
+          order.user_id,
+          planType,
+          supabaseUrl,
+          serviceKey
+        );
 
-      if (!result.success) {
-        console.error('开通会员失败:', result.error);
+        if (result.success) {
+          activateSuccess = true;
+          activateResult = result;
+          break;
+        } else {
+          console.error('开通会员失败，重试:', attempt, result.error);
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+      
+      if (!activateSuccess) {
+        console.error('开通会员失败，3 次重试都失败了');
         return new Response('fail', { status: 500 });
       }
 
       console.log('会员开通成功:', orderNo, planType);
+      
+      // 开通成功后，再更新订单状态（即使更新失败也没关系，会员已经开通了）
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/orders?id=eq.${order.id}&status=eq.pending`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+            trade_no: tradeNo,
+          }),
+        });
+      } catch (e) {
+        console.warn('更新订单状态失败，但会员已经开通了:', e.message);
+      }
     }
 
     // 返回 success 给易支付
