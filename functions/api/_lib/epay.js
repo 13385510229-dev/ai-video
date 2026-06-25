@@ -18,7 +18,7 @@ export function generateSign(params, key) {
   });
 
   // 加上密钥
-  signStr += key;
+  signStr += `&key=${key}`;
 
   // MD5 加密
   return md5(signStr);
