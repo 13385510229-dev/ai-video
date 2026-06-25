@@ -171,7 +171,7 @@ export async function createVideoTask(params, env) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(300000), // 300 秒超时（5分钟）
+      signal: AbortSignal.timeout(480000), // 480 秒超时（8分钟，10秒视频需要更长时间）
     });
 
     const elapsed = Date.now() - startTime;
