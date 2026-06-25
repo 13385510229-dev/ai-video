@@ -159,7 +159,7 @@ export async function createVideoTask(params, env) {
     imageCount: images?.length || 0,
   });
 
-  // 重试 1 次（总共 2 次），避免超时太久
+  // 重试 1 次（总共 2 次）
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -170,7 +170,7 @@ export async function createVideoTask(params, env) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(60000), // 60 秒超时（高分辨率下创建任务需要时间）
+        signal: AbortSignal.timeout(30000), // 30 秒超时
       });
 
       if (!res.ok) {
@@ -189,20 +189,14 @@ export async function createVideoTask(params, env) {
     } catch (error) {
       lastError = error;
       console.log(`Attempt ${attempt + 1} failed:`, error.message);
-      if (attempt < 2) {
-        await new Promise(r => setTimeout(r, 2000)); // 等 2 秒重试
+      if (attempt < 1) {
+        await new Promise(r => setTimeout(r, 2000)); // 只重试 1 次
       }
     }
   }
 
-  // 全部失败，降级到模拟模式
-  console.log('Agnes AI 全部失败，使用模拟模式:', lastError?.message);
-  return {
-    task_id: `sim_${Date.now()}`,
-    status: 'processing',
-    mode: 'simulation-fallback',
-    error: lastError?.message,
-  };
+  // 全部失败，直接抛出错误（暂时去掉模拟模式兜底，方便排查问题）
+  throw lastError || new Error('Agnes API 调用失败');
 }
 
 // 查询视频任务状态
