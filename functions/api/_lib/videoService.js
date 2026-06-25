@@ -48,20 +48,20 @@ function calculateResolution(aspectRatio) {
   }
 }
 
-// 风格关键词映射（优化版，每个关键词都有用）
+// 风格关键词映射（精简版，避免提示词过长）
 const styleKeywords = {
-  realistic: 'photorealistic, hyperrealistic, ultra realistic, real photo, high quality, highly detailed, sharp focus, intricate details, crisp clear, real person, real human, real skin, skin texture, pores, natural lighting, professional photography, dslr, 8k uhd, ',
-  anime: 'anime style, manga, 2d animation, japanese anime, vibrant colors, cel shading, anime artwork, anime key visual, studio ghibli style, makoto shinkai style, beautiful anime art, high quality anime, highly detailed, sharp focus, clean line art, masterpiece, best quality, ',
-  '3d': '3d render, octane render, CGI, 3d animation, pixar style, disney style, 3d cartoon, unreal engine 5, ray tracing, subsurface scattering, highly detailed 3d, ultra detailed, sharp focus, cinematic lighting, high quality, photorealistic 3d, ',
-  cinematic: 'cinematic, film grain, movie shot, dramatic lighting, hollywood style, anamorphic lens, cinematic color grading, live action, real people, real actors, film photography, arri alexa, shot on film, imax quality, epic, grand, sweeping, highly detailed, sharp focus, ultra realistic, wide shot, establishing shot, ',
+  realistic: 'photorealistic, real photo, highly detailed, sharp focus, real person, real skin, professional photography, 8k uhd, ',
+  anime: 'anime style, japanese anime, vibrant colors, anime artwork, studio ghibli style, masterpiece, best quality, ',
+  '3d': '3d render, octane render, CGI, pixar style, unreal engine 5, highly detailed, cinematic lighting, ',
+  cinematic: 'cinematic, film grain, dramatic lighting, cinematic color grading, live action, real people, shot on film, highly detailed, sharp focus, ',
 };
 
-// 风格对应的负面提示词（避免生成其他风格 + 避免模糊低质）
+// 风格对应的负面提示词（精简版）
 const styleNegativeKeywords = {
-  realistic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, 3d render, cgi, 3d cartoon, pixar, disney style, stylized, comic, comic book, rendered, 3d, game, video game, game screenshot, plastic, fake, doll, toy, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, ',
-  anime: 'realistic, photo, 3d render, cgi, photorealistic, hyperrealistic, real person, real human, live action, film, movie, photograph, dslr, camera shot, realistic style, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, sketch, line art, unfinished, ',
-  '3d': 'anime, 2d, cartoon, manga, realistic, photo, photorealistic, real person, real human, live action, drawing, painting, illustration, comic, 2d animation, hand drawn, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, noisy, grainy, distorted, deformed, ugly, watermark, text, signature, low poly, bad topology, texture error, ',
-  cinematic: 'anime, cartoon, 2d, manga, animation, drawing, painting, illustration, 3d render, cgi, pixar, disney, 3d cartoon, stylized, comic, comic book, blurry, out of focus, fuzzy, pixelated, low resolution, low quality, distorted, deformed, ugly, watermark, text, signature, cheap, home video, phone footage, found footage, ',
+  realistic: 'anime, cartoon, 2d, manga, 3d render, cgi, game, plastic, fake, blurry, out of focus, low quality, ugly, watermark, text, ',
+  anime: 'realistic, photo, 3d render, cgi, photorealistic, live action, blurry, out of focus, low quality, ugly, watermark, text, sketch, ',
+  '3d': 'anime, 2d, cartoon, realistic, photo, photorealistic, hand drawn, blurry, out of focus, low quality, ugly, watermark, text, low poly, ',
+  cinematic: 'anime, cartoon, 2d, manga, 3d render, cgi, blurry, out of focus, low quality, ugly, watermark, text, cheap, home video, ',
 };
 
 // 创建视频生成任务
@@ -163,7 +163,7 @@ export async function createVideoTask(params, env) {
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`${apiBase}/videos`, {
+      const res = await fetch(`${apiBase}/videos/generations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
