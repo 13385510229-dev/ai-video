@@ -56,10 +56,6 @@ export async function onRequestPost(context) {
     const user = users[0];
     const cost = calculateCost(duration);
 
-    if (user.balance < cost) {
-      return errorResponse('余额不足，请充值', 400);
-    }
-
     // 先扣除次数（优先扣每日次数，再扣余额）
     const deductResult = await deductCredits(
       userId,

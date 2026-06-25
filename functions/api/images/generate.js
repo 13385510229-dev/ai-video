@@ -52,10 +52,6 @@ export async function onRequestPost(context) {
     const user = users[0];
     const cost = 1; // 每张图片消耗 1 次
 
-    if (user.balance < cost) {
-      return errorResponse('余额不足，请充值', 400);
-    }
-
     // 生成唯一 ID（时间戳 + 随机数，避免自增主键问题）
     const imageId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
@@ -72,21 +68,33 @@ export async function onRequestPost(context) {
       return errorResponse(deductResult.error || '余额不足，请充值', 400);
     }
 
-    // 先保存记录
-    const { data: imageRecord, error: insertError } = await supabase
-      .from('images')
-      .insert({
-        id: imageId,
-        user_id: userId,
-        prompt: prompt.trim(),
-        negative_prompt: negativePrompt?.trim() || null,
-        style: style || null,
-        size: size || '1024x768',
-        status: 'processing',
-        cost,
+    // 先保存记录（改用原生 fetch，确保稳定）
+    try {
+      const insertRes = await fetch(`${env.SUPABASE_URL}/rest/v1/images`, {
+        method: 'POST',
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({
+          id: imageId,
+          user_id: userId,
+          prompt: prompt.trim(),
+          negative_prompt: negativePrompt?.trim() || null,
+          style: style || null,
+          size: size || '1024x768',
+          status: 'processing',
+          cost,
+        }),
       });
 
-    if (insertError) {
+      if (!insertRes.ok) {
+        const insertErr = await insertRes.text();
+        throw new Error(`插入记录失败: ${insertRes.status} - ${insertErr}`);
+      }
+    } catch (insertError) {
       console.error('保存图片记录失败:', insertError);
       
       // 保存记录失败，退还次数
@@ -120,8 +128,7 @@ export async function onRequestPost(context) {
         console.error('退还次数失败:', refundError);
       }
       
-      const errMsg = insertError.message || JSON.stringify(insertError);
-      return errorResponse(`创建记录失败: ${errMsg}`, 500);
+      return errorResponse(`创建记录失败: ${insertError.message}`, 500);
     }
 
     // 同步生成图片

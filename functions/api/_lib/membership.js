@@ -78,11 +78,11 @@ export async function checkAndResetDailyCredits(userId, { supabaseUrl, serviceKe
 
       // 更新用户的每日次数和重置日期
       try {
-        await fetch(`${supabase.supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
+        await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
           method: 'PATCH',
           headers: {
-            'apikey': supabase.serviceKey,
-            'Authorization': `Bearer ${supabase.serviceKey}`,
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
