@@ -1,6 +1,7 @@
 // 获取当前用户信息
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { requireAuth, jsonResponse, errorResponse, handleOptions } from '../_lib/auth.js';
+import { checkAndResetDailyCredits, MEMBERSHIP_PLANS } from '../_lib/membership.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -19,25 +20,37 @@ export async function onRequestGet(context) {
 
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId);
+    // 检查并重置每日次数，同时获取用户信息
+    const userInfo = await checkAndResetDailyCredits(userId, {
+      supabaseUrl: env.SUPABASE_URL,
+      serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
+    });
 
-    if (error || !users?.[0]) {
+    if (!userInfo) {
       return errorResponse('用户不存在', 404);
     }
 
-    const user = users[0];
+    // 构建返回数据
+    const result = {
+      id: userInfo.id,
+      email: userInfo.email,
+      balance: userInfo.balance,
+      created_at: userInfo.created_at,
+      is_member: userInfo.is_member || false,
+    };
+
+    // 如果是会员，返回会员详情
+    if (userInfo.is_member) {
+      result.membership_type = userInfo.membership_type;
+      result.membership_expire_at = userInfo.membership_expire_at;
+      result.daily_credits_total = userInfo.daily_credits_total;
+      result.daily_credits_remaining = userInfo.daily_credits_remaining;
+      result.membership_name = MEMBERSHIP_PLANS[userInfo.membership_type]?.name || '会员';
+    }
 
     return jsonResponse({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        balance: user.balance,
-        created_at: user.created_at,
-      },
+      user: result,
     });
   } catch (error) {
     console.error('获取用户信息失败:', error);

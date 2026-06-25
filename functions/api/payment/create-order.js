@@ -1,12 +1,23 @@
 import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
+import { MEMBERSHIP_PLANS } from '../_lib/membership.js';
 
-// 套餐配置
-const packages = [
-  { id: 1, name: '10次套餐', credits: 10, amount: 9.9 },
-  { id: 2, name: '30次套餐', credits: 30, amount: 24.9 },
-  { id: 3, name: '100次套餐', credits: 100, amount: 69.9 },
+// 次卡套餐配置
+const creditPackages = [
+  { id: 1, name: '10次套餐', type: 'credits', credits: 10, amount: 9.9 },
+  { id: 2, name: '30次套餐', type: 'credits', credits: 30, amount: 24.9 },
+  { id: 3, name: '100次套餐', type: 'credits', credits: 100, amount: 69.9 },
 ];
+
+// 会员套餐配置
+const membershipPackages = [
+  { id: 10, name: '月卡会员', type: 'membership', membership_type: 'monthly', amount: 39, daily_credits: 10 },
+  { id: 11, name: '季卡会员', type: 'membership', membership_type: 'quarterly', amount: 99, daily_credits: 15 },
+  { id: 12, name: '年卡会员', type: 'membership', membership_type: 'yearly', amount: 299, daily_credits: 20 },
+];
+
+// 所有套餐
+const allPackages = [...creditPackages, ...membershipPackages];
 
 // 生成订单号
 function generateOrderNo() {
@@ -33,7 +44,7 @@ export async function onRequestPost(context) {
     const { packageId } = body;
 
     // 查找套餐
-    const pkg = packages.find(p => p.id === packageId);
+    const pkg = allPackages.find(p => p.id === packageId);
     if (!pkg) {
       return errorResponse('套餐不存在');
     }
@@ -44,14 +55,14 @@ export async function onRequestPost(context) {
     // 生成订单号
     const orderNo = generateOrderNo();
 
-    // 创建订单
+    // 创建订单（会员套餐 credits 存 0，用 packageId 区分类型）
     const { data: order, error } = await supabase
       .from('orders')
       .insert({
         user_id: userId,
         order_no: orderNo,
         amount: pkg.amount,
-        credits: pkg.credits,
+        credits: pkg.type === 'credits' ? pkg.credits : 0,
         status: 'pending',
       });
 

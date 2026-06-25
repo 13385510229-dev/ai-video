@@ -72,12 +72,40 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  // 扣除次数（生成成功后调用）
+  // 扣除次数（生成成功后调用，优先扣每日次数）
   deductCredits: (amount: number) => {
     set((state) => {
       if (!state.user) return state;
-      const newBalance = Math.max(0, (state.user.balance || 0) - amount);
-      const newUser = { ...state.user, balance: newBalance };
+      
+      const user = state.user;
+      
+      // 如果是会员，先扣每日次数
+      if (user.is_member && user.daily_credits_remaining !== undefined) {
+        const dailyRemaining = user.daily_credits_remaining;
+        
+        if (dailyRemaining >= amount) {
+          // 每日次数够用
+          const newDailyRemaining = dailyRemaining - amount;
+          const newUser = { ...user, daily_credits_remaining: newDailyRemaining };
+          localStorage.setItem('user', JSON.stringify(newUser));
+          return { user: newUser };
+        } else {
+          // 每日次数不够，扣完每日的，剩下的扣余额
+          const remainingCost = amount - dailyRemaining;
+          const newBalance = Math.max(0, (user.balance || 0) - remainingCost);
+          const newUser = { 
+            ...user, 
+            daily_credits_remaining: 0,
+            balance: newBalance 
+          };
+          localStorage.setItem('user', JSON.stringify(newUser));
+          return { user: newUser };
+        }
+      }
+      
+      // 不是会员，直接扣余额
+      const newBalance = Math.max(0, (user.balance || 0) - amount);
+      const newUser = { ...user, balance: newBalance };
       localStorage.setItem('user', JSON.stringify(newUser));
       return { user: newUser };
     });

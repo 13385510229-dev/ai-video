@@ -1,6 +1,7 @@
 import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { createVideoTask, calculateCost } from '../_lib/videoService.js';
+import { deductCredits } from '../_lib/membership.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -76,20 +77,17 @@ export async function onRequestPost(context) {
       console.warn('Agnes API 调用失败，已降级到模拟模式:', taskResult.error);
     }
 
-    // 扣除余额（直接用 fetch，确保 100% 生效）
-    try {
-      await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ balance: user.balance - cost }),
-      });
-    } catch (updateError) {
-      console.error('扣除余额失败:', updateError);
-      // 即使扣除失败也继续，后面可以补扣
+    // 扣除次数（优先扣每日次数，再扣余额）
+    const deductResult = await deductCredits(
+      userId,
+      cost,
+      null,
+      env.SUPABASE_URL,
+      env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    if (!deductResult.success) {
+      return errorResponse(deductResult.error || '余额不足，请充值', 400);
     }
 
     // 保存视频记录（直接用 fetch，确保 100% 生效）

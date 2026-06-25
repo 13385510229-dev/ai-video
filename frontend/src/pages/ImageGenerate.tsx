@@ -20,6 +20,7 @@ export default function ImageGenerate() {
   const [uploading, setUploading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState(0);
 
   const cost = 1; // 每张图片消耗 1 次
 
@@ -109,6 +110,19 @@ export default function ImageGenerate() {
     setLoading(true);
     setError('');
     setGeneratedImage(null);
+    setProgress(0);
+
+    // 启动进度条动画（预估25秒）
+    const estimatedTime = 25;
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      currentProgress += (90 / estimatedTime); // 最多到90%，留10%给最后处理
+      if (currentProgress >= 90) {
+        currentProgress = 90;
+        clearInterval(interval);
+      }
+      setProgress(currentProgress);
+    }, 1000);
 
     try {
       const params: any = {
@@ -126,16 +140,22 @@ export default function ImageGenerate() {
       const res = await generateImage(params);
 
       if (res.data.success) {
-        setGeneratedImage(res.data.image.image_url);
-        // 扣除本地余额，立马看到效果
-        deductCredits(cost);
+        setProgress(100); // 完成，到100%
+        setTimeout(() => {
+          setGeneratedImage(res.data.image.image_url);
+          // 扣除本地余额，立马看到效果
+          deductCredits(cost);
+        }, 500);
       } else {
         setError(res.data.message || '生成失败');
       }
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || '生成失败，请稍后重试');
     } finally {
-      setLoading(false);
+      clearInterval(interval);
+      setTimeout(() => {
+        setLoading(false);
+      }, 800); // 延迟一下，让用户看到100%的进度
     }
   };
 
@@ -299,20 +319,27 @@ export default function ImageGenerate() {
             余额：<span className="text-gray-900 font-medium">{user?.balance || 0} 次</span>
           </div>
 
-          <button
-            onClick={handleGenerate}
-            disabled={loading || !prompt.trim()}
-            className="px-8 py-3 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                生成中...
-              </span>
-            ) : (
-              '生成图片'
-            )}
-          </button>
+          <div className="relative">
+            <button
+              onClick={handleGenerate}
+              disabled={loading || !prompt.trim() || (mode === 'image2image' && !referenceImageUrl)}
+              className="px-8 py-3 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 relative overflow-hidden min-w-[140px]"
+            >
+              {loading ? (
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {Math.round(progress)}%
+                </span>
+              ) : (
+                '生成图片'
+              )}
+              {loading && (
+                <div 
+                  className="absolute inset-0 bg-gray-700 transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* 错误提示 */}

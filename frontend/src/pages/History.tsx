@@ -7,6 +7,15 @@ const History = () => {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(Date.now());
+
+  // 每秒更新时间，让进度条动起来
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchVideos = async () => {
     try {
@@ -74,6 +83,45 @@ const History = () => {
       failed: 'text-red-400',
     };
     return map[status] || 'text-gray-400';
+  };
+
+  // 根据视频时长估算总生成时间（秒）
+  const getEstimatedTotalTime = (duration: number) => {
+    if (duration <= 5) return 90; // 5秒视频约1.5分钟
+    if (duration <= 10) return 180; // 10秒视频约3分钟
+    return 480; // 30秒视频约8分钟
+  };
+
+  // 计算进度百分比
+  const getProgress = (video: Video) => {
+    if (video.status === 'succeeded') return 100;
+    if (video.status === 'failed') return 0;
+    
+    const createdAt = new Date(video.created_at).getTime();
+    const elapsed = (now - createdAt) / 1000; // 已过去的秒数
+    const total = getEstimatedTotalTime(video.duration);
+    
+    const progress = Math.min((elapsed / total) * 100, 95); // 最多到95%，留5%给最后处理
+    return Math.max(progress, 5); // 最少5%，避免一开始就是0
+  };
+
+  // 格式化剩余时间
+  const formatRemainingTime = (video: Video) => {
+    if (video.status === 'succeeded') return '已完成';
+    if (video.status === 'failed') return '生成失败';
+    
+    const createdAt = new Date(video.created_at).getTime();
+    const elapsed = (now - createdAt) / 1000;
+    const total = getEstimatedTotalTime(video.duration);
+    const remaining = Math.max(total - elapsed, 0);
+    
+    if (remaining < 60) {
+      return `预计还需 ${Math.ceil(remaining)} 秒`;
+    } else {
+      const minutes = Math.floor(remaining / 60);
+      const seconds = Math.ceil(remaining % 60);
+      return `预计还需 ${minutes}分${seconds}秒`;
+    }
   };
 
   if (loading) {
@@ -153,8 +201,16 @@ const History = () => {
                       </>
                     ) : (
                       <>
-                        <div className="w-7 h-7 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mb-3" />
-                        <p className="text-gray-500 text-sm">{getStatusText(video.status)}</p>
+                        <div className="w-full px-6 mb-3">
+                          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gray-600 rounded-full transition-all duration-1000 ease-out"
+                              style={{ width: `${getProgress(video)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <p className="text-gray-600 text-sm font-medium">{getStatusText(video.status)}</p>
+                        <p className="text-gray-400 text-xs mt-1">{formatRemainingTime(video)}</p>
                       </>
                     )}
                   </div>

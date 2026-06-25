@@ -4,6 +4,12 @@ export interface User {
   email: string;
   balance: number;
   created_at: string;
+  is_member?: boolean;
+  membership_type?: string;
+  membership_name?: string;
+  membership_expire_at?: string;
+  daily_credits_total?: number;
+  daily_credits_remaining?: number;
 }
 
 // 视频类型
