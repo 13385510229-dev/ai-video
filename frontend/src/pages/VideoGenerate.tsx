@@ -202,7 +202,7 @@ const VideoGenerate = () => {
         </p>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up" style={{ animationDelay: '0.1s' }}>
+      <div className="generate-card bg-white border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up" style={{ animationDelay: '0.1s' }}>
         {/* 生成模式 */}
         <div className="mb-8">
           <label className="block text-sm font-medium mb-3 text-gray-700">

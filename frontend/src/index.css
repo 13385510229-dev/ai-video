@@ -376,3 +376,10 @@ html {
   border-color: #e5e5e5;
   border-top-color: #111111;
 }
+
+/* 浅色主题生成卡片（强制覆盖） */
+.light-theme .generate-card {
+  background-color: #ffffff !important;
+  border-color: #e5e5e5 !important;
+  color: #111111 !important;
+}
