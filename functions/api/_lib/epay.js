@@ -17,8 +17,8 @@ export function generateSign(params, key) {
     signStr += `${k}=${sortedParams[k]}`;
   });
 
-  // 加上密钥
-  signStr += `&key=${key}`;
+  // 加上密钥（直接拼接，没有 &key= 前缀）
+  signStr += key;
 
   // MD5 加密
   return md5(signStr);

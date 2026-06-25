@@ -91,13 +91,12 @@ export async function onRequestPost(context) {
       // 构造支付参数
       const payParams = {
         pid: epayPid,
-        type: payType || 'wxpay', // wxpay 微信，alipay 支付宝
+        type: payType || 'alipay', // wxpay 微信，alipay 支付宝
         out_trade_no: orderNo,
         notify_url: `${baseUrl}/api/payment/notify`,
         return_url: `${baseUrl}/recharge?success=1&order=${orderNo}`,
         name: pkg.name,
         money: pkg.amount.toFixed(2),
-        sitename: 'AI创意工坊',
       };
 
       // 生成签名
