@@ -170,7 +170,7 @@ export async function createVideoTask(params, env) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(60000), // 60 秒超时
+        signal: AbortSignal.timeout(90000), // 90 秒超时（图生视频更慢）
       });
 
       if (!res.ok) {
