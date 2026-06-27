@@ -142,9 +142,15 @@ const VideoGenerate = () => {
       return;
     }
 
-    // 多图/关键帧模式需要至少一张图
-    if ((mode === 'multi-image' || mode === 'keyframes') && multipleImageUrls.filter(u => u).length === 0) {
+    // 多图模式需要至少一张图
+    if (mode === 'multi-image' && multipleImageUrls.filter(u => u).length === 0) {
       setError(uploading ? '图片上传中，请稍候...' : '请至少选择一张参考图片');
+      return;
+    }
+
+    // 关键帧模式需要至少2张图片
+    if (mode === 'keyframes' && multipleImageUrls.filter(u => u).length < 2) {
+      setError(uploading ? '图片上传中，请稍候...' : '关键帧模式需要至少选择2张参考图片');
       return;
     }
 
