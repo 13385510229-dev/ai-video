@@ -66,7 +66,7 @@ export async function onRequestPost(context) {
         apiKey: env.AGNES_API_KEY || '',
         mode,
         image,
-        apiBase: env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
+        apiBase: env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1',
       });
 
       if (!genResult.success) {

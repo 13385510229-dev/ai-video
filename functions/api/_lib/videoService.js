@@ -80,7 +80,7 @@ export async function createVideoTask(params, env) {
   } = params;
 
   const apiKey = env.AGNES_API_KEY;
-  const apiBase = env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1';
+  const apiBase = env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
 
   // 如果没有配置 API Key，使用模拟模式
   if (!apiKey) {
@@ -160,55 +160,39 @@ export async function createVideoTask(params, env) {
   console.log('开始调用 Agnes API，模式:', mode, '时长:', duration, '比例:', aspect_ratio);
   const startTime = Date.now();
   
-  const maxRetries = 3;
-  const retryDelay = 2000;
+  try {
+    const res = await fetch(`${apiBase}/videos`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(480000),
+    });
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(`${apiBase}/videos`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(480000),
-      });
+    const elapsed = Date.now() - startTime;
+    console.log('Agnes API 返回，耗时:', elapsed, 'ms，状态:', res.status);
 
-      const elapsed = Date.now() - startTime;
-      console.log('Agnes API 返回，尝试:', attempt, '/', maxRetries, '耗时:', elapsed, 'ms，状态:', res.status);
-
-      if (!res.ok) {
-        const err = await res.text().catch(() => '');
-        
-        if (res.status === 503 && attempt < maxRetries) {
-          console.warn(`Agnes API 返回 503 服务不可用，等待 ${retryDelay}ms 后重试...`);
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          continue;
-        }
-
-        throw new Error(`API error ${res.status}: ${err}`);
-      }
-
-      const data = await res.json();
-      const taskId = data.id || data.task_id || (data.data && data.data.id);
-
-      console.log('任务创建成功，task_id:', taskId);
-
-      return {
-        task_id: taskId,
-        status: 'processing',
-        mode: 'agnes',
-      };
-    } catch (error) {
-      if (attempt >= maxRetries) {
-        const elapsed = Date.now() - startTime;
-        console.error('Agnes API 调用失败，重试', maxRetries, '次后仍失败，耗时:', elapsed, 'ms，错误:', error.message);
-        throw error;
-      }
-      console.warn(`Agnes API 调用失败（尝试 ${attempt}/${maxRetries}），错误:`, error.message, '，准备重试...');
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`API error ${res.status}: ${err}`);
     }
+
+    const data = await res.json();
+    const taskId = data.id || data.task_id || (data.data && data.data.id);
+
+    console.log('任务创建成功，task_id:', taskId);
+
+    return {
+      task_id: taskId,
+      status: 'processing',
+      mode: 'agnes',
+    };
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    console.error('Agnes API 调用失败，耗时:', elapsed, 'ms，错误:', error.message);
+    throw error;
   }
 }
 
@@ -231,7 +215,7 @@ export async function getVideoTaskStatus(taskId, env) {
   }
 
   const apiKey = env.AGNES_API_KEY;
-  const apiBase = env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1';
+  const apiBase = env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
 
   try {
     const res = await fetch(`${apiBase}/videos/${taskId}`, {
