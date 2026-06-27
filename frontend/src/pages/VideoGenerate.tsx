@@ -128,6 +128,35 @@ const VideoGenerate = () => {
   const addMoreImages = () => {
     setMultipleFiles([...multipleFiles, null as any]);
     setMultipleImageBase64s([...multipleImageBase64s, '']);
+    setMultipleImageUrls([...multipleImageUrls, '']);
+  };
+
+  // 删除指定索引的图片
+  const removeImage = (index: number) => {
+    const newFiles = multipleFiles.filter((_, i) => i !== index);
+    const newBase64s = multipleImageBase64s.filter((_, i) => i !== index);
+    const newUrls = multipleImageUrls.filter((_, i) => i !== index);
+    setMultipleFiles(newFiles.length > 0 ? newFiles : [null as any]);
+    setMultipleImageBase64s(newBase64s.length > 0 ? newBase64s : ['']);
+    setMultipleImageUrls(newUrls.length > 0 ? newUrls : ['']);
+  };
+
+  // 切换模式时清除相关图片状态
+  const handleModeChange = (newMode: string) => {
+    setMode(newMode);
+    // 清除单图状态
+    if (newMode !== 'i2v') {
+      setSingleFile(null);
+      setSingleImageBase64('');
+      setSingleImageUrl('');
+    }
+    // 清除多图状态
+    if (newMode !== 'multi-image' && newMode !== 'keyframes') {
+      setMultipleFiles([null as any, null as any]);
+      setMultipleImageBase64s(['', '']);
+      setMultipleImageUrls(['', '']);
+    }
+    setError('');
   };
 
   const handleGenerate = async () => {
@@ -221,7 +250,7 @@ const VideoGenerate = () => {
             {VIDEO_MODES.map((m) => (
               <button
                 key={m.value}
-                onClick={() => setMode(m.value)}
+                onClick={() => handleModeChange(m.value)}
                 className={`p-4 rounded-xl border text-left transition-all duration-300 ${
                   mode === m.value
                     ? 'border-gray-900 bg-gray-50 shadow-md'
