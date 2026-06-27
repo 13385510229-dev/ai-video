@@ -1,7 +1,6 @@
 // Agnes Image 2.1 Flash 图像生成服务（零依赖版本）
 // 支持文生图，同步返回结果
 
-const AGNES_API_BASE = 'https://apihub.agnes-ai.com/v1';
 const MODEL_NAME = 'agnes-image-2.1-flash';
 
 // 生成图片
@@ -13,6 +12,7 @@ export async function generateImage({
   apiKey = '',
   mode = 'text2image', // text2image: 文生图, image2image: 图生图
   image = null, // 图生图的参考图 URL
+  apiBase = 'https://apihub.agnes-ai.com/v1', // API 基础地址，从外部传入
 }) {
   // 没有 API Key 时使用模拟模式
   if (!apiKey) {
@@ -68,7 +68,7 @@ export async function generateImage({
   }
 
   try {
-    const response = await fetch(`${AGNES_API_BASE}/images/generations`, {
+    const response = await fetch(`${apiBase}/images/generations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
