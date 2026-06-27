@@ -128,10 +128,7 @@ export async function createVideoTask(params, env) {
   } else if (mode === 'keyframes' && images && images.length > 0) {
     // 关键帧动画模式
     requestBody.mode = 'keyframes';
-    requestBody.extra_body = {
-      image: images, // 关键帧 URL 数组
-      mode: 'keyframes',
-    };
+    requestBody.images = images; // 关键帧 URL 数组（放在顶层）
   } else {
     // 文生视频模式（默认）
     requestBody.mode = 'ti2vid';
