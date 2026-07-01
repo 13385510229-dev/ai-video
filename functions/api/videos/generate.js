@@ -115,6 +115,7 @@ export async function onRequestPost(context) {
         duration,
         aspect_ratio: aspectRatio,
         task_id: taskResult.task_id,
+        video_id: taskResult.video_id || null,
         status: 'processing',
         cost,
       }),

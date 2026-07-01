@@ -53,18 +53,19 @@ export async function generateImage({
     model: MODEL_NAME,
     prompt: fullPrompt,
     size,
+    extra_body: {
+      response_format: 'url', // 官方要求：URL 输出放在 extra_body 里
+    },
   };
 
-  // 负面提示词（用专门的参数）
+  // 负面提示词
   if (fullNegativePrompt) {
     requestBody.negative_prompt = fullNegativePrompt;
   }
 
-  // 图生图模式
+  // 图生图模式（image 数组放在 extra_body 里，官方标准格式）
   if (mode === 'image2image' && image) {
-    requestBody.extra_body = {
-      image: [image], // 图生图参数放在 extra_body 里，数组格式
-    };
+    requestBody.extra_body.image = [image];
   }
 
   try {
@@ -75,7 +76,7 @@ export async function generateImage({
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(60000), // 60 秒超时
+      signal: AbortSignal.timeout(120000), // 120 秒超时（官方推荐 60-360 秒）
     });
 
     if (!response.ok) {

@@ -40,7 +40,7 @@ export async function onRequestGet(context) {
       if (!video.task_id) continue;
 
       try {
-        const statusResult = await getVideoTaskStatus(video.task_id, env);
+        const statusResult = await getVideoTaskStatus(video.task_id, env, video.video_id);
 
         if (statusResult.status === 'succeeded') {
           // 视频生成成功（直接用 fetch）

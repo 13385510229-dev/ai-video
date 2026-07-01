@@ -2,36 +2,29 @@
 // 纯 fetch 实现，无外部依赖
 
 // 计算 num_frames 和 frame_rate
-// 1080p 级别分辨率最大支持约 169 帧，这里保守用 161 帧
+// 官方规则：num_frames 必须遵循 8n + 1 规则，最大 441 帧
+// 官方推荐参数：3秒=81帧，5秒=121帧，10秒=241帧，18秒=441帧
 function calculateFrames(duration) {
-  // 合法帧数（8n + 1），高分辨率下最多到 161 帧
-  const validFrames = [81, 121, 161];
+  // 官方推荐的合法帧数（8n + 1）
+  const validFrames = [81, 121, 241, 441];
+  const frameRate = 24; // 官方统一推荐 24fps
 
-  let frameRate = 24;
-  let targetFrames = duration * frameRate;
+  const targetFrames = duration * frameRate;
 
-  // 如果目标帧数超过最大支持，改用 12fps 以获得更长时长
-  if (targetFrames > validFrames[validFrames.length - 1]) {
-    frameRate = 12;
-    targetFrames = duration * frameRate;
-  }
-
-  // 找到最接近的合法 num_frames 值
+  // 找到最接近且不超过目标的合法帧数
   let bestFrames = validFrames[0];
-  let minDiff = Math.abs(targetFrames - validFrames[0]);
-
   for (const f of validFrames) {
-    const diff = Math.abs(targetFrames - f);
-    if (diff < minDiff) {
-      minDiff = diff;
+    if (f <= targetFrames) {
       bestFrames = f;
+    } else {
+      break;
     }
   }
 
   return { num_frames: bestFrames, frame_rate: frameRate };
 }
 
-// 计算分辨率（768p 级别，都是 64 的倍数，确保 Agnes 支持）
+// 计算分辨率（768p 级别，官方标准规格）
 function calculateResolution(aspectRatio) {
   switch (aspectRatio) {
     case '9:16':
@@ -44,7 +37,7 @@ function calculateResolution(aspectRatio) {
       return { width: 576, height: 768 };
     case '16:9':
     default:
-      return { width: 1280, height: 768 };
+      return { width: 1152, height: 768 }; // 官方默认 16:9 分辨率
   }
 }
 
@@ -114,25 +107,23 @@ export async function createVideoTask(params, env) {
     frame_rate,
   };
 
-  // 根据模式设置不同参数（按官方文档）
+  // 根据模式设置不同参数（严格按官方文档）
   if (mode === 'i2v' && image) {
-    // 图生视频模式
-    requestBody.mode = 'ti2vid';
-    requestBody.image = image; // 顶层 image 参数，URL 格式
+    // 图生视频模式：顶层 image 参数
+    requestBody.image = image;
   } else if (mode === 'multi-image' && images && images.length > 0) {
-    // 多图视频模式
-    requestBody.mode = 'ti2vid';
+    // 多图视频模式：extra_body.image 数组
     requestBody.extra_body = {
-      image: images, // 多图 URL 数组
+      image: images,
     };
   } else if (mode === 'keyframes' && images && images.length > 0) {
-    // 关键帧动画模式
-    requestBody.mode = 'keyframes';
-    requestBody.images = images; // 关键帧 URL 数组（放在顶层）
-  } else {
-    // 文生视频模式（默认）
-    requestBody.mode = 'ti2vid';
+    // 关键帧动画模式：extra_body.image 数组 + extra_body.mode = keyframes
+    requestBody.extra_body = {
+      image: images,
+      mode: 'keyframes',
+    };
   }
+  // 文生视频（默认）：不需要额外 mode 参数
 
   // 可选参数
   if (seed !== null) {
@@ -181,11 +172,13 @@ export async function createVideoTask(params, env) {
 
     const data = await res.json();
     const taskId = data.id || data.task_id || (data.data && data.data.id);
+    const videoId = data.video_id || (data.data && data.data.video_id);
 
-    console.log('任务创建成功，task_id:', taskId);
+    console.log('任务创建成功，task_id:', taskId, 'video_id:', videoId);
 
     return {
       task_id: taskId,
+      video_id: videoId,
       status: 'processing',
       mode: 'agnes',
     };
@@ -197,9 +190,10 @@ export async function createVideoTask(params, env) {
 }
 
 // 查询视频任务状态
-export async function getVideoTaskStatus(taskId, env) {
+// 优先用 video_id 调用官方推荐的新接口，兼容旧的 task_id
+export async function getVideoTaskStatus(taskId, env, videoId = null) {
   // 模拟模式
-  if (taskId.startsWith('sim_')) {
+  if (taskId && taskId.startsWith('sim_')) {
     const createdTime = parseInt(taskId.split('_')[1]);
     const elapsed = Date.now() - createdTime;
 
@@ -215,15 +209,30 @@ export async function getVideoTaskStatus(taskId, env) {
   }
 
   const apiKey = env.AGNES_API_KEY;
-  const apiBase = env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
 
   try {
-    const res = await fetch(`${apiBase}/videos/${taskId}`, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      signal: AbortSignal.timeout(30000),
-    });
+    let res;
+
+    // 优先用 video_id 调用官方推荐的新接口
+    if (videoId) {
+      console.log('使用 video_id 查询:', videoId);
+      res = await fetch(`https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=agnes-video-v2.0`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        signal: AbortSignal.timeout(30000),
+      });
+    } else {
+      // 兼容旧版：用 task_id 查询
+      const apiBase = env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
+      console.log('使用 task_id 查询（兼容旧版）:', taskId);
+      res = await fetch(`${apiBase}/videos/${taskId}`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        signal: AbortSignal.timeout(30000),
+      });
+    }
 
     if (!res.ok) {
       throw new Error(`API error ${res.status}`);
@@ -262,7 +271,7 @@ export async function getVideoTaskStatus(taskId, env) {
     // 错误信息
     let errorMessage = null;
     if (data.error_message) errorMessage = data.error_message;
-    else if (data.error) errorMessage = data.error;
+    else if (data.error) errorMessage = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
     else if (data.data && data.data.error) errorMessage = data.data.error;
 
     return {
@@ -282,5 +291,5 @@ export async function getVideoTaskStatus(taskId, env) {
 export function calculateCost(duration) {
   if (duration <= 5) return 1;
   if (duration <= 10) return 2;
-  return 3; // 30 秒
+  return 3; // 18 秒
 }

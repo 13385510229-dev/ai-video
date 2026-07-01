@@ -22,6 +22,7 @@ export interface Video {
   duration: number;
   aspect_ratio: string;
   task_id?: string;
+  video_id?: string;
   status: 'pending' | 'processing' | 'succeeded' | 'failed';
   video_url?: string;
   thumbnail_url?: string;
@@ -97,6 +98,7 @@ export const VIDEO_STYLES = [
 export const VIDEO_DURATIONS = [
   { value: 5, label: '5秒', cost: 1 },
   { value: 10, label: '10秒', cost: 2 },
+  { value: 18, label: '18秒', cost: 3 },
 ];
 
 // 视频比例
