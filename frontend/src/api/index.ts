@@ -147,6 +147,15 @@ export const uploadImage = (base64Image: string, filename?: string) => {
   });
 };
 
+// ==================== 聊天相关 ====================
+
+// 发送聊天消息
+export const sendChatMessage = (messages: Array<{ role: string; content: string }>) => {
+  return api.post('/chat/send', { messages }, {
+    timeout: 60000, // 聊天超时 60 秒
+  });
+};
+
 // ==================== 支付相关 ====================
 
 // 创建订单

@@ -1,5 +1,5 @@
 // Agnes Image 2.1 Flash 图像生成服务（零依赖版本）
-// 支持文生图，同步返回结果
+// 支持文生图、图生图，同步返回结果
 
 const MODEL_NAME = 'agnes-image-2.1-flash';
 
@@ -63,7 +63,7 @@ export async function generateImage({
     requestBody.negative_prompt = fullNegativePrompt;
   }
 
-  // 图生图模式（image 数组放在 extra_body 里，官方标准格式）
+  // 图生图模式（image 数组放在 extra_body 里，2.1 官方格式）
   if (mode === 'image2image' && image) {
     requestBody.extra_body.image = [image];
   }

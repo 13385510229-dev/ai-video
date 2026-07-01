@@ -13,6 +13,7 @@ import ImageGenerate from './pages/ImageGenerate';
 import ImageHistory from './pages/ImageHistory';
 import Recharge from './pages/Recharge';
 import Profile from './pages/Profile';
+import Chat from './pages/Chat';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminOrders from './pages/admin/AdminOrders';
@@ -65,6 +66,7 @@ function App() {
         <Route path="image-history" element={<ProtectedRoute><ImageHistory /></ProtectedRoute>} />
         <Route path="recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
         <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
         <Route path="terms" element={<TermsOfService />} />
         <Route path="privacy" element={<PrivacyPolicy />} />
       </Route>
