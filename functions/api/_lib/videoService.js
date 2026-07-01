@@ -2,19 +2,20 @@
 // 纯 fetch 实现，无外部依赖
 
 // 计算 num_frames 和 frame_rate
-// 严格按照官方推荐档位：3秒=81帧，5秒=121帧，10秒=241帧，18秒=441帧
+// 3/5/10秒：24fps 官方推荐；18秒：18fps 避开1080p帧数限制
 function calculateFrames(duration) {
-  const frameRate = 24; // 官方统一推荐 24fps
+  let frameRate = 24;
   let numFrames;
 
   if (duration <= 3) {
-    numFrames = 81;    // 约 3 秒
+    numFrames = 81;    // 约 3 秒 @24fps
   } else if (duration <= 5) {
-    numFrames = 121;   // 约 5 秒
+    numFrames = 121;   // 约 5 秒 @24fps
   } else if (duration <= 10) {
-    numFrames = 241;   // 约 10 秒
+    numFrames = 241;   // 约 10 秒 @24fps
   } else {
-    numFrames = 441;   // 约 18 秒
+    frameRate = 23;
+    numFrames = 409;   // 约 18 秒 @23fps（8n+1 格式，避开 1080p 帧数限制）
   }
 
   return { num_frames: numFrames, frame_rate: frameRate };
@@ -33,7 +34,7 @@ function calculateResolution(aspectRatio) {
       return { width: 576, height: 768 };
     case '16:9':
     default:
-      return { width: 1280, height: 720 }; // 标准 720p，避开 1080p 帧数限制，保证 18s 可生成
+      return { width: 1152, height: 768 }; // 官方标准 16:9 分辨率
   }
 }
 
