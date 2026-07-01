@@ -33,7 +33,7 @@ function calculateResolution(aspectRatio) {
       return { width: 576, height: 768 };
     case '16:9':
     default:
-      return { width: 1152, height: 768 }; // 官方默认 16:9 分辨率
+      return { width: 1280, height: 720 }; // 标准 720p，避开 1080p 帧数限制，保证 18s 可生成
   }
 }
 
