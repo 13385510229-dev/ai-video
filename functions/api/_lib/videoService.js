@@ -14,8 +14,8 @@ function calculateFrames(duration) {
   } else if (duration <= 10) {
     numFrames = 241;   // 约 10 秒 @24fps
   } else {
-    frameRate = 23;
-    numFrames = 409;   // 约 18 秒 @23fps（8n+1 格式，避开 1080p 帧数限制）
+    frameRate = 20;
+    numFrames = 361;   // 约 18 秒 @20fps（8n+1 格式，避开 1080p 帧数限制）
   }
 
   return { num_frames: numFrames, frame_rate: frameRate };

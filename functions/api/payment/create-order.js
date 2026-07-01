@@ -5,16 +5,16 @@ import { generateSign } from '../_lib/epay.js';
 
 // 次卡套餐配置
 const creditPackages = [
-  { id: 1, name: '10次套餐', type: 'credits', credits: 10, amount: 9.9 },
-  { id: 2, name: '30次套餐', type: 'credits', credits: 30, amount: 24.9 },
-  { id: 3, name: '100次套餐', type: 'credits', credits: 100, amount: 69.9 },
+  { id: 1, name: '体验套餐', type: 'credits', credits: 10, amount: 9.9 },
+  { id: 2, name: '标准套餐', type: 'credits', credits: 30, amount: 19.9 },
+  { id: 3, name: '专业套餐', type: 'credits', credits: 100, amount: 49.9 },
 ];
 
 // 会员套餐配置
 const membershipPackages = [
-  { id: 10, name: '月卡会员', type: 'membership', membership_type: 'monthly', amount: 39, daily_credits: 10 },
-  { id: 11, name: '季卡会员', type: 'membership', membership_type: 'quarterly', amount: 99, daily_credits: 15 },
-  { id: 12, name: '年卡会员', type: 'membership', membership_type: 'yearly', amount: 299, daily_credits: 20 },
+  { id: 10, name: '月卡会员', type: 'membership', membership_type: 'monthly', amount: 29, daily_credits: 5 },
+  { id: 11, name: '季卡会员', type: 'membership', membership_type: 'quarterly', amount: 69, daily_credits: 8 },
+  { id: 12, name: '年卡会员', type: 'membership', membership_type: 'yearly', amount: 199, daily_credits: 12 },
 ];
 
 // 所有套餐

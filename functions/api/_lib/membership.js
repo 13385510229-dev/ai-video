@@ -4,20 +4,20 @@
 export const MEMBERSHIP_PLANS = {
   monthly: {
     name: '月卡',
-    price: 39,
-    daily_credits: 10,
+    price: 29,
+    daily_credits: 5,
     duration_days: 30,
   },
   quarterly: {
     name: '季卡',
-    price: 99,
-    daily_credits: 15,
+    price: 69,
+    daily_credits: 8,
     duration_days: 90,
   },
   yearly: {
     name: '年卡',
-    price: 299,
-    daily_credits: 20,
+    price: 199,
+    daily_credits: 12,
     duration_days: 365,
   },
 };

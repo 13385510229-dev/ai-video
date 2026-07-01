@@ -7,8 +7,8 @@ import type { Package } from '../types';
 // 次卡套餐
 const creditPackages: Package[] = [
   { id: 1, name: '体验套餐', credits: 10, amount: 9.9 },
-  { id: 2, name: '标准套餐', credits: 30, amount: 24.9 },
-  { id: 3, name: '专业套餐', credits: 100, amount: 69.9 },
+  { id: 2, name: '标准套餐', credits: 30, amount: 19.9 },
+  { id: 3, name: '专业套餐', credits: 100, amount: 49.9 },
 ];
 
 // 会员套餐
@@ -29,8 +29,8 @@ const membershipPackages: MembershipPackage[] = [
     name: '月卡会员', 
     type: 'membership',
     membership_type: 'monthly',
-    amount: 39, 
-    daily_credits: 10, 
+    amount: 29, 
+    daily_credits: 5, 
     duration_days: 30,
   },
   { 
@@ -38,8 +38,8 @@ const membershipPackages: MembershipPackage[] = [
     name: '季卡会员', 
     type: 'membership',
     membership_type: 'quarterly',
-    amount: 99, 
-    daily_credits: 15, 
+    amount: 69, 
+    daily_credits: 8, 
     duration_days: 90,
     tag: '推荐',
   },
@@ -48,8 +48,8 @@ const membershipPackages: MembershipPackage[] = [
     name: '年卡会员', 
     type: 'membership',
     membership_type: 'yearly',
-    amount: 299, 
-    daily_credits: 20, 
+    amount: 199, 
+    daily_credits: 12, 
     duration_days: 365,
     tag: '最划算',
   },
