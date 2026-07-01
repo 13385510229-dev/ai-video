@@ -34,7 +34,6 @@ const Layout = () => {
     { path: '/history', label: '视频历史' },
     { path: '/image', label: '图片生成' },
     { path: '/image-history', label: '图片历史' },
-    { path: '/chat', label: 'AI 对话' },
     { path: '/recharge', label: '充值' },
     { path: '/profile', label: '个人中心' },
   ];

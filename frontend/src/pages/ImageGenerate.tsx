@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { generateImage, uploadImage } from '../api';
 import { IMAGE_SIZES, IMAGE_STYLES, IMAGE_MODES } from '../types';
+import ChatPanel from '../components/ChatPanel';
 
 export default function ImageGenerate() {
   const navigate = useNavigate();
@@ -160,7 +161,7 @@ export default function ImageGenerate() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-6 py-12 animate-fade-in">
       {/* 标题 */}
       <div className="text-center mb-12 animate-slide-up">
         <h1 className="text-5xl font-bold mb-4 text-gray-900 tracking-tight">
@@ -171,11 +172,14 @@ export default function ImageGenerate() {
         </p>
       </div>
 
-      {/* 生成卡片 */}
-      <div 
-        className="generate-card border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up"
-        style={{ backgroundColor: '#ffffff', color: '#111111' }}
-      >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 左侧：生成表单 */}
+        <div className="lg:col-span-2">
+          {/* 生成卡片 */}
+          <div 
+            className="generate-card border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up"
+            style={{ backgroundColor: '#ffffff', color: '#111111' }}
+          >
         {/* 生成模式 */}
         <div className="mb-8">
           <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -378,11 +382,22 @@ export default function ImageGenerate() {
             </div>
           </div>
         )}
-      </div>
+          </div>
 
-      {/* 提示词建议 */}
-      <div className="mt-8 text-center text-sm text-gray-400">
-        <p>提示：描述越详细，生成效果越好。可以包含主体、场景、风格、光照等元素</p>
+          {/* 提示词建议 */}
+          <div className="mt-8 text-center text-sm text-gray-400">
+            <p>提示：描述越详细，生成效果越好。可以包含主体、场景、风格、光照等元素</p>
+          </div>
+        </div>
+
+        {/* 右侧：AI 聊天面板 */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-24 h-[calc(100vh-120px)]">
+            <ChatPanel
+              contextHint="你好！我是图片创作助手，可以帮你优化提示词、构思画面创意、推荐风格。有什么需要帮忙的吗？"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

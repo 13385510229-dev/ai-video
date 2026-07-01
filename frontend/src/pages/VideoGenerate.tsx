@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { generateVideo, uploadImage } from '../api';
 import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS, VIDEO_MODES } from '../types';
+import ChatPanel from '../components/ChatPanel';
 
 const VideoGenerate = () => {
   const navigate = useNavigate();
@@ -227,7 +228,7 @@ const VideoGenerate = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-6 py-12 animate-fade-in">
       <div className="text-center mb-12 animate-slide-up">
         <h1 className="text-5xl font-bold mb-4 tracking-tight text-gray-900">
           AI 视频生成
@@ -237,10 +238,13 @@ const VideoGenerate = () => {
         </p>
       </div>
 
-      <div 
-        className="generate-card border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up" 
-        style={{ animationDelay: '0.1s', backgroundColor: '#ffffff', color: '#111111' }}
-      >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 左侧：生成表单 */}
+        <div className="lg:col-span-2">
+          <div 
+            className="generate-card border border-gray-200 rounded-2xl p-8 shadow-sm animate-slide-up" 
+            style={{ animationDelay: '0.1s', backgroundColor: '#ffffff', color: '#111111' }}
+          >
         {/* 生成模式 */}
         <div className="mb-8">
           <label className="block text-sm font-medium mb-3 text-gray-700">
@@ -474,12 +478,23 @@ const VideoGenerate = () => {
             )}
           </button>
         </div>
-      </div>
+          </div>
 
-      {/* 提示信息 */}
-      <div className="mt-8 text-center text-sm text-gray-400 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-        <p>提示：视频生成大约需要 5~10 分钟，请耐心等待</p>
-        <p className="mt-1">生成过程中可以关闭页面，稍后在历史记录中查看结果</p>
+          {/* 提示信息 */}
+          <div className="mt-8 text-center text-sm text-gray-400 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <p>提示：视频生成大约需要 5~10 分钟，请耐心等待</p>
+            <p className="mt-1">生成过程中可以关闭页面，稍后在历史记录中查看结果</p>
+          </div>
+        </div>
+
+        {/* 右侧：AI 聊天面板 */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-24 h-[calc(100vh-120px)]">
+            <ChatPanel
+              contextHint="你好！我是视频创作助手，可以帮你优化视频描述、构思创意、调整风格参数。有什么需要帮忙的吗？"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
