@@ -2,26 +2,22 @@
 // 纯 fetch 实现，无外部依赖
 
 // 计算 num_frames 和 frame_rate
-// 官方规则：num_frames 必须遵循 8n + 1 规则，最大 441 帧
-// 官方推荐参数：3秒=81帧，5秒=121帧，10秒=241帧，18秒=441帧
+// 严格按照官方推荐档位：3秒=81帧，5秒=121帧，10秒=241帧，18秒=441帧
 function calculateFrames(duration) {
-  // 官方推荐的合法帧数（8n + 1）
-  const validFrames = [81, 121, 241, 441];
   const frameRate = 24; // 官方统一推荐 24fps
+  let numFrames;
 
-  const targetFrames = duration * frameRate;
-
-  // 找到最接近且不超过目标的合法帧数
-  let bestFrames = validFrames[0];
-  for (const f of validFrames) {
-    if (f <= targetFrames) {
-      bestFrames = f;
-    } else {
-      break;
-    }
+  if (duration <= 3) {
+    numFrames = 81;    // 约 3 秒
+  } else if (duration <= 5) {
+    numFrames = 121;   // 约 5 秒
+  } else if (duration <= 10) {
+    numFrames = 241;   // 约 10 秒
+  } else {
+    numFrames = 441;   // 约 18 秒
   }
 
-  return { num_frames: bestFrames, frame_rate: frameRate };
+  return { num_frames: numFrames, frame_rate: frameRate };
 }
 
 // 计算分辨率（768p 级别，官方标准规格）
@@ -247,7 +243,7 @@ export async function getVideoTaskStatus(taskId, env, videoId = null) {
     let normalizedStatus = 'processing';
     const successStatuses = ['succeeded', 'success', 'completed', 'done'];
     const failedStatuses = ['failed', 'error', 'cancelled'];
-    const processingStatuses = ['in-progress', 'processing', 'running', 'generating', 'queued', 'pending'];
+    const processingStatuses = ['in-progress', 'in_progress', 'processing', 'running', 'generating', 'queued', 'pending'];
 
     if (successStatuses.includes(status)) {
       normalizedStatus = 'succeeded';
