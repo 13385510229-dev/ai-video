@@ -64,6 +64,7 @@ const ChatPanel = ({ initialPrompt = '', contextHint = '' }: ChatPanelProps) => 
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // 当前活跃会话
@@ -75,9 +76,11 @@ const ChatPanel = ({ initialPrompt = '', contextHint = '' }: ChatPanelProps) => 
     },
   ];
 
-  // 自动滚动到底部
+  // 自动滚动到底部（只滚动聊天面板内部，不影响页面）
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   useEffect(() => {
@@ -337,7 +340,7 @@ const ChatPanel = ({ initialPrompt = '', contextHint = '' }: ChatPanelProps) => 
       )}
 
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.map((msg, index) => (
           <div
             key={index}
