@@ -56,7 +56,7 @@ export async function onRequestPost(context) {
     // 生成订单号
     const orderNo = generateOrderNo();
 
-    // 创建订单（会员套餐 credits 存 0，用 packageId 区分类型）
+    // 创建订单（会员套餐 credits 存 0，存储套餐类型和ID方便回调判断）
     const { data: order, error } = await supabase
       .from('orders')
       .insert({
@@ -65,6 +65,8 @@ export async function onRequestPost(context) {
         amount: pkg.amount,
         credits: pkg.type === 'credits' ? pkg.credits : 0,
         status: 'pending',
+        package_id: pkg.id,
+        membership_type: pkg.type === 'membership' ? pkg.membership_type : null,
       });
 
     if (error) {

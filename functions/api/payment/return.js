@@ -7,8 +7,12 @@ export async function onRequestGet(context) {
     const outTradeNo = url.searchParams.get('out_trade_no') || '';
     const payStatus = url.searchParams.get('pay_status') || '';
 
-    // 重定向到前端充值页面，带上订单号
-    const redirectUrl = `/recharge?order_no=${outTradeNo}&status=${payStatus}`;
+    // 判断支付是否成功
+    const isSuccess = payStatus === 'TRADE_SUCCESS' || payStatus === '1' || payStatus === 'success';
+    
+    // 重定向到前端充值页面，带上订单号和成功状态
+    // 使用前端期望的参数格式：success 和 order
+    const redirectUrl = `/recharge?success=${isSuccess ? '1' : '0'}&order=${outTradeNo}`;
     
     return Response.redirect(redirectUrl, 302);
   } catch (error) {

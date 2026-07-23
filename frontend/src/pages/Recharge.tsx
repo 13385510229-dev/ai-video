@@ -75,10 +75,40 @@ const Recharge = () => {
     const orderParam = searchParams.get('order');
     
     if (successParam === '1' && orderParam) {
-      // 支付成功跳转回来，刷新用户信息
-      setSuccess(true);
       setOrderNo(orderParam);
-      refreshUser();
+      
+      // 显示支付状态页面，让用户看到反馈
+      setShowPayment(true);
+      setChecking(true);
+      
+      // 轮询查询订单状态（最多轮询 5 次，每次间隔 3 秒）
+      let attempts = 0;
+      const maxAttempts = 5;
+      
+      const pollOrder = async () => {
+        if (attempts >= maxAttempts) {
+          setChecking(false);
+          return;
+        }
+        
+        try {
+          const res = await verifyOrder(orderParam);
+          if (res.data.success && res.data.order?.status === 'paid') {
+            setSuccess(true);
+            await refreshUser();
+            setChecking(false);
+            return;
+          }
+        } catch (e) {
+          console.error('轮询查询订单失败:', e);
+        }
+        
+        attempts++;
+        setTimeout(pollOrder, 3000);
+      };
+      
+      // 延迟 2 秒后开始轮询（给回调一点时间）
+      setTimeout(pollOrder, 2000);
     }
   }, [searchParams, refreshUser]);
 

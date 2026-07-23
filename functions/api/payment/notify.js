@@ -165,42 +165,46 @@ export async function onRequestPost(context) {
       }
       
     } else {
-      // 会员：开通会员（带重试）
-      const amount = parseFloat(order.amount);
-      let planType = 'monthly';
-      
-      if (Math.abs(amount - 39) < 0.01) planType = 'monthly';
-      else if (Math.abs(amount - 99) < 0.01) planType = 'quarterly';
-      else if (Math.abs(amount - 299) < 0.01) planType = 'yearly';
-
-      let activateSuccess = false;
-      let activateResult = null;
-      
-      // 最多重试 3 次
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const result = await activateMembership(
-          order.user_id,
-          planType,
-          supabaseUrl,
-          serviceKey
-        );
-
-        if (result.success) {
-          activateSuccess = true;
-          activateResult = result;
-          break;
-        } else {
-          console.error('开通会员失败，重试:', attempt, result.error);
-          await new Promise(r => setTimeout(r, 1000));
+        // 会员：开通会员（带重试）
+        // 优先使用订单中存储的 membership_type，更可靠
+        let planType = order.membership_type || 'monthly';
+        
+        // 如果订单没有存储类型，再从金额推断（兼容旧订单）
+        if (!planType) {
+          const amount = parseFloat(order.amount);
+          if (Math.abs(amount - 29) < 0.01) planType = 'monthly';
+          else if (Math.abs(amount - 69) < 0.01) planType = 'quarterly';
+          else if (Math.abs(amount - 199) < 0.01) planType = 'yearly';
         }
-      }
-      
-      if (!activateSuccess) {
-        console.error('开通会员失败，3 次重试都失败了');
-        return new Response('fail', { status: 500 });
-      }
 
-      console.log('会员开通成功:', orderNo, planType);
+        let activateSuccess = false;
+        let activateResult = null;
+        
+        // 最多重试 3 次
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const result = await activateMembership(
+            order.user_id,
+            planType,
+            supabaseUrl,
+            serviceKey
+          );
+
+          if (result.success) {
+            activateSuccess = true;
+            activateResult = result;
+            break;
+          } else {
+            console.error('开通会员失败，重试:', attempt, result.error);
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+        
+        if (!activateSuccess) {
+          console.error('开通会员失败，3 次重试都失败了');
+          return new Response('fail', { status: 500 });
+        }
+
+        console.log('会员开通成功:', orderNo, planType);
       
       // 开通成功后，再更新订单状态（即使更新失败也没关系，会员已经开通了）
       try {
