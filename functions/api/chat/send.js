@@ -1,6 +1,36 @@
 import { errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 
-// Agnes 2.5 Flash 聊天接口（流式输出）
+// 聊天模型列表（按优先级排列）
+const CHAT_MODELS = [
+  { name: 'agnes-2.5-flash', thinking: true },
+  { name: 'agnes-2.0-flash', thinking: false },
+];
+
+// 调用 Agnes 聊天 API
+async function callAgnesChat({ apiKey, messages, temperature, max_tokens, stream, model }) {
+  const requestBody = {
+    model: model.name,
+    messages,
+    temperature,
+    max_tokens,
+    stream: true,
+  };
+  
+  if (model.thinking) {
+    requestBody.chat_template_kwargs = { thinking: true };
+  }
+
+  return await fetch('https://apihub.agnes-ai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+}
+
+// Agnes 聊天接口（流式输出，带模型回退）
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -9,7 +39,6 @@ export async function onRequestPost(context) {
   }
 
   try {
-    // 需要登录
     const authResult = await requireAuth(request, env);
     if (authResult.error) {
       return errorResponse(authResult.error, 401);
@@ -27,39 +56,49 @@ export async function onRequestPost(context) {
       return errorResponse('API Key 未配置');
     }
 
-    // 调用 Agnes 2.5 Flash API（流式）
-    // Agnes-2.5-Flash 支持 512K 上下文窗口，代码能力大幅提升
-    const apiRes = await fetch('https://apihub.agnes-ai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'agnes-2.5-flash',
-        messages,
-        temperature,
-        max_tokens,
-        stream: true,
-        // 启用 Thinking 模式，提升复杂推理和代码任务性能
-        chat_template_kwargs: {
-          thinking: true,
-        },
-      }),
-    });
-
-    if (!apiRes.ok) {
-      const errorText = await apiRes.text();
-      console.error('Agnes Chat API 错误:', apiRes.status, errorText);
-      return errorResponse(`AI 响应失败: ${apiRes.status}`, 500);
+    // 尝试调用模型，失败则回退到下一个
+    let apiRes;
+    let lastError;
+    
+    for (const model of CHAT_MODELS) {
+      try {
+        console.log(`尝试调用模型: ${model.name}`);
+        apiRes = await callAgnesChat({ apiKey, messages, temperature, max_tokens, stream, model });
+        
+        if (apiRes.ok) {
+          console.log(`模型 ${model.name} 调用成功`);
+          break;
+        }
+        
+        const errorText = await apiRes.text();
+        lastError = { status: apiRes.status, message: errorText, model: model.name };
+        console.error(`模型 ${model.name} 调用失败: ${apiRes.status}`, errorText);
+        
+        // 404/401/403 表示模型不可用，尝试下一个
+        if (apiRes.status === 404 || apiRes.status === 401 || apiRes.status === 403) {
+          continue;
+        }
+        
+        // 其他错误直接返回
+        throw new Error(`API error ${apiRes.status}: ${errorText}`);
+        
+      } catch (e) {
+        lastError = { status: 500, message: e.message, model: model.name };
+        console.error(`模型 ${model.name} 请求异常:`, e.message);
+        // 继续尝试下一个模型
+        continue;
+      }
     }
 
-    // 透传流式响应
+    if (!apiRes || !apiRes.ok) {
+      console.error('所有模型调用失败:', lastError);
+      return errorResponse(`AI 响应失败: ${lastError?.message || '未知错误'}`, 500);
+    }
+
     const { readable, writable } = new TransformStream();
     const reader = apiRes.body.getReader();
     const writer = writable.getWriter();
 
-    // 异步处理流
     (async () => {
       try {
         while (true) {
