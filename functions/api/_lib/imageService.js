@@ -1,7 +1,22 @@
 // Agnes Image 2.1 Flash 图像生成服务（零依赖版本）
 // 支持文生图、图生图，同步返回结果
+// 使用官方推荐的新参数格式：size 档位 + ratio 宽高比
 
 const MODEL_NAME = 'agnes-image-2.1-flash';
+
+// 尺寸映射：旧格式（widthxheight）→ 新格式（size + ratio）
+const SIZE_MAPPING = {
+  '1024x768': { size: '1K', ratio: '4:3' },
+  '768x1024': { size: '1K', ratio: '3:4' },
+  '1024x1024': { size: '1K', ratio: '1:1' },
+  '1280x720': { size: '1K', ratio: '16:9' },
+  '720x1280': { size: '1K', ratio: '9:16' },
+  '2048x1536': { size: '2K', ratio: '4:3' },
+  '1536x2048': { size: '2K', ratio: '3:4' },
+  '2048x2048': { size: '2K', ratio: '1:1' },
+  '2560x1440': { size: '2K', ratio: '16:9' },
+  '1440x2560': { size: '2K', ratio: '9:16' },
+};
 
 // 生成图片
 export async function generateImage({
@@ -48,11 +63,15 @@ export async function generateImage({
     fullNegativePrompt = fullNegativePrompt + negativePrompt;
   }
 
-  // 构建请求体（基础参数）
+  // 转换尺寸格式：旧格式 → 新格式（size 档位 + ratio 宽高比）
+  const sizeConfig = SIZE_MAPPING[size] || { size: '1K', ratio: '1:1' };
+
+  // 构建请求体（使用官方推荐的新参数格式）
   const requestBody = {
     model: MODEL_NAME,
     prompt: fullPrompt,
-    size,
+    size: sizeConfig.size, // 使用档位值：1K、2K、3K、4K
+    ratio: sizeConfig.ratio, // 使用宽高比
     extra_body: {
       response_format: 'url', // 官方要求：URL 输出放在 extra_body 里
     },
@@ -63,10 +82,18 @@ export async function generateImage({
     requestBody.negative_prompt = fullNegativePrompt;
   }
 
-  // 图生图模式（image 数组放在 extra_body 里，2.1 官方格式）
+  // 图生图模式（image 数组放在顶层，2.1 官方格式）
   if (mode === 'image2image' && image) {
-    requestBody.extra_body.image = [image];
+    requestBody.image = [image];
   }
+
+  console.log('Agnes Image API 请求参数:', {
+    model: MODEL_NAME,
+    size: sizeConfig.size,
+    ratio: sizeConfig.ratio,
+    mode,
+    hasImage: !!image,
+  });
 
   try {
     const response = await fetch(`${apiBase}/images/generations`, {

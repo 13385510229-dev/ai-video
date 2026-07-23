@@ -114,7 +114,8 @@ export async function createVideoTask(params, env) {
       image: images,
     };
   } else if (mode === 'keyframes' && images && images.length > 0) {
-    // 关键帧动画模式：extra_body.image 数组 + extra_body.mode = keyframes
+    // 关键帧动画模式：顶层 mode + extra_body.image 数组 + extra_body.mode
+    requestBody.mode = 'keyframes';
     requestBody.extra_body = {
       image: images,
       mode: 'keyframes',
