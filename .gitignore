@@ -38,3 +38,7 @@ yarn-error.log*
 .wrangler
 worker.js
 worker.js.map
+
+.dev.vars*
+!.dev.vars.example
+!.env.example
