@@ -1,6 +1,6 @@
 import { errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
 
-// Agnes 2.0 Flash 聊天接口（流式输出）
+// Agnes 2.5 Flash 聊天接口（流式输出）
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -27,7 +27,8 @@ export async function onRequestPost(context) {
       return errorResponse('API Key 未配置');
     }
 
-    // 调用 Agnes 2.0 Flash API（流式）
+    // 调用 Agnes 2.5 Flash API（流式）
+    // Agnes-2.5-Flash 支持 512K 上下文窗口，代码能力大幅提升
     const apiRes = await fetch('https://apihub.agnes-ai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -35,11 +36,15 @@ export async function onRequestPost(context) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'agnes-2.0-flash',
+        model: 'agnes-2.5-flash',
         messages,
         temperature,
         max_tokens,
         stream: true,
+        // 启用 Thinking 模式，提升复杂推理和代码任务性能
+        chat_template_kwargs: {
+          thinking: true,
+        },
       }),
     });
 
