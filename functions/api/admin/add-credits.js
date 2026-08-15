@@ -32,41 +32,59 @@ export async function onRequestPost(context) {
     // 初始化 Supabase
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-    // 查询用户
-    const { data: users, error: userError } = await supabase
-      .from('users')
-      .select('balance')
-      .eq('id', userId);
+    // CAS 原子调整用户余额：最多 5 次重试，防止并发覆盖
+    const MAX_RETRY = 5;
+    let finalBalance = null;
 
-    if (userError || !users?.[0]) {
-      return errorResponse('用户不存在');
+    for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+      // 查询用户
+      const { data: users, error: userError } = await supabase
+        .from('users')
+        .select('balance')
+        .eq('id', userId);
+
+      if (userError) {
+        console.error('查询用户失败:', userError);
+        return errorResponse('用户不存在或查询失败', 500);
+      }
+      if (!users?.[0]) {
+        return errorResponse('用户不存在');
+      }
+
+      const user = users[0];
+      const currentBalance = Number(user.balance) || 0;
+      const targetBalance = Math.max(0, currentBalance + creditsNum);
+
+      // 条件更新：只有余额还是刚才读的值才更新，否则重试
+      const updateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}&balance=eq.${currentBalance}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({ balance: targetBalance }),
+      });
+
+      if (updateRes.ok) {
+        const result = await updateRes.json().catch(() => []);
+        if (Array.isArray(result) && result.length > 0) {
+          finalBalance = targetBalance;
+          break;
+        }
+      }
+      // 否则并发冲突，下一轮重试
     }
 
-    const user = users[0];
-    const newBalance = Math.max(0, (user.balance || 0) + creditsNum);
-
-    // 更新余额（直接用 fetch，确保 100% 生效）
-    const updateRes = await fetch(`${env.SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
-      method: 'PATCH',
-      headers: {
-        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      },
-      body: JSON.stringify({ balance: newBalance }),
-    });
-
-    if (!updateRes.ok) {
-      const err = await updateRes.json().catch(() => ({}));
-      console.error('更新用户余额失败:', err);
-      return errorResponse('操作失败，请稍后重试', 500);
+    if (finalBalance === null) {
+      return errorResponse('操作过于频繁，请稍后重试', 409);
     }
 
     return jsonResponse({
       success: true,
       message: creditsNum > 0 ? `成功增加 ${creditsNum} 次` : `成功扣除 ${Math.abs(creditsNum)} 次`,
-      newBalance,
+      newBalance: finalBalance,
     });
   } catch (error) {
     console.error('调整余额失败:', error);

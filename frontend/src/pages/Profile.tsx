@@ -2,16 +2,34 @@ import { useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { Link } from 'react-router-dom';
 import { exportUserData } from '../api';
+import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import { formatError } from '../utils/errors';
 
 const Profile = () => {
   const { user, logout } = useAuthStore();
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<ReturnType<typeof formatError> | null>(null);
 
   const handleExportData = async () => {
+    setExportError(null);
     setExporting(true);
     try {
       const res = await exportUserData();
-      const blob = res.data;
+      const blob: Blob = res.data;
+      // 后端返回错误时（即使是 blob responseType），Content-Type 是 application/json
+      if (blob && blob.type && blob.type.includes('application/json')) {
+        try {
+          const text = await blob.text();
+          const errObj = JSON.parse(text);
+          setExportError(formatError({
+            response: { status: 500, data: errObj },
+            message: errObj?.error || '导出失败',
+          }, '导出失败'));
+          return;
+        } catch (_) {
+          // 解析失败就继续按正常 blob 处理
+        }
+      }
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -20,8 +38,9 @@ const Profile = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch (err: any) {
       console.error('导出数据失败:', err);
+      setExportError(formatError(err, '导出失败'));
     } finally {
       setExporting(false);
     }
@@ -30,6 +49,16 @@ const Profile = () => {
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 animate-fade-in">
       <h1 className="text-3xl font-bold mb-8 text-gray-900">个人中心</h1>
+
+      {exportError && (
+        <div className="mb-6 animate-slide-up">
+          <FriendlyErrorBox
+            error={exportError}
+            onClose={() => setExportError(null)}
+            onRetry={() => handleExportData()}
+          />
+        </div>
+      )}
 
       <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6 animate-slide-up shadow-sm">
         <h2 className="text-lg font-semibold mb-6 text-gray-900">账户信息</h2>

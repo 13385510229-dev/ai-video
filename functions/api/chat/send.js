@@ -94,30 +94,17 @@ async function chargeChat(userId: any, env: any): Promise<{ ok: boolean; msg?: s
 // 退还聊天扣费（仅非会员且调用失败时）
 async function refundChat(userId: any, used_daily: boolean | undefined, env: any) {
   if (!used_daily && used_daily !== false) return; // 会员跳过
-  // used_daily 非会员只会是 false（扣余额）
   if (used_daily) return; // 聊天目前不动 daily_credits_used，无退还
   try {
-    const supabaseUrl = env.SUPABASE_URL;
-    const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
-    const u = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=balance`, {
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-    });
-    if (u.ok) {
-      const arr = await u.json();
-      if (arr?.[0]) {
-        const cur = arr[0].balance || 0;
-        await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-          method: 'PATCH',
-          headers: {
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ balance: cur + CHAT_COST_FOR_NON_MEMBER }),
-        });
-      }
-    }
-  } catch (_) {}
+    const { refundCredits } = await import('../_lib/membership.js');
+    await refundCredits(
+      userId,
+      CHAT_COST_FOR_NON_MEMBER,
+      false,
+      env.SUPABASE_URL,
+      env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  } catch (_) { /* 退款失败不影响主流程 */ }
 }
 
 // Agnes 聊天接口（流式输出，带模型回退）

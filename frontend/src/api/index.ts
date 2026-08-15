@@ -1,5 +1,52 @@
 // API 配置 - Cloudflare Pages Functions 版本
 import axios from 'axios';
+import { useAuthStore } from '../store/auth';
+
+// 全局 401 跳登录锁（防止多个并发请求重复触发跳转和多次清 token）
+let _userRedirectingToLogin = false;
+let _adminRedirectingToLogin = false;
+
+function resetUserAuthAndRedirect() {
+  if (_userRedirectingToLogin) return;
+  _userRedirectingToLogin = true;
+  try {
+    // 同时清 store 和 localStorage，避免页面内残留登录态
+    const authStore = useAuthStore.getState?.();
+    if (authStore?.logout) {
+      try { authStore.logout(); } catch (_) { /* ignore */ }
+    } else {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+  } catch (_) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }
+  // 延迟一帧，让拦截器先 reject 错误，避免 Promise 链被同步跳页面打断
+  setTimeout(() => {
+    try {
+      window.location.href = '/login';
+    } finally {
+      setTimeout(() => { _userRedirectingToLogin = false; }, 1500);
+    }
+  }, 0);
+}
+
+function resetAdminAuthAndRedirect() {
+  if (_adminRedirectingToLogin) return;
+  _adminRedirectingToLogin = true;
+  try {
+    sessionStorage.removeItem('adminKey');
+    localStorage.removeItem('adminToken');
+  } catch (_) { /* ignore */ }
+  setTimeout(() => {
+    try {
+      window.location.href = '/admin/login';
+    } finally {
+      setTimeout(() => { _adminRedirectingToLogin = false; }, 1500);
+    }
+  }, 0);
+}
 
 // 基础 API 实例
 const api = axios.create({
@@ -16,14 +63,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 响应拦截器：处理 401
+// 响应拦截器：处理 401（登录态失效自动跳登录，一次性不重复）
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      resetUserAuthAndRedirect();
     }
     return Promise.reject(error);
   }
@@ -48,9 +93,7 @@ adminApi.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      sessionStorage.removeItem('adminKey');
-      localStorage.removeItem('adminToken');
-      window.location.href = '/admin/login';
+      resetAdminAuthAndRedirect();
     }
     return Promise.reject(error);
   }
