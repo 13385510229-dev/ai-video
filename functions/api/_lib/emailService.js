@@ -79,6 +79,7 @@ export async function sendVerificationCode(email, env) {
 // 验证验证码
 export async function verifyCode(email, code, env) {
   let record = null;
+  let storageType = null; // 'kv' or 'memory'
 
   // 优先从 KV 读取
   if (env?.KV_CACHE) {
@@ -86,8 +87,7 @@ export async function verifyCode(email, code, env) {
       const data = await env.KV_CACHE.get(`verify:${email}`, 'json');
       if (data) {
         record = data;
-        // 验证后删除
-        await env.KV_CACHE.delete(`verify:${email}`);
+        storageType = 'kv';
       }
     } catch (err) {
       console.warn('KV 读取失败，尝试内存存储:', err);
@@ -98,20 +98,34 @@ export async function verifyCode(email, code, env) {
   if (!record) {
     record = verificationCodes.get(email);
     if (record) {
-      verificationCodes.delete(email);
+      storageType = 'memory';
     }
   }
 
   if (!record) {
-    return { valid: false, error: '验证码不存在或已过期' };
+    return { valid: false, error: '验证码不存在或已过期，请重新获取' };
   }
 
   if (record.expiresAt < Date.now()) {
-    return { valid: false, error: '验证码已过期' };
+    // 过期了才删除
+    if (storageType === 'kv' && env?.KV_CACHE) {
+      await env.KV_CACHE.delete(`verify:${email}`).catch(() => {});
+    } else if (storageType === 'memory') {
+      verificationCodes.delete(email);
+    }
+    return { valid: false, error: '验证码已过期，请重新获取' };
   }
 
   if (record.code !== code) {
-    return { valid: false, error: '验证码错误' };
+    // 验证码错误，不删除，允许用户重试
+    return { valid: false, error: '验证码错误，请重新输入' };
+  }
+
+  // 验证成功，删除验证码
+  if (storageType === 'kv' && env?.KV_CACHE) {
+    await env.KV_CACHE.delete(`verify:${email}`).catch(() => {});
+  } else if (storageType === 'memory') {
+    verificationCodes.delete(email);
   }
 
   return { valid: true };

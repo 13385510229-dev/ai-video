@@ -32,7 +32,7 @@ export async function onRequestPost(context) {
 
     if (queryError) {
       console.error('查询用户失败:', queryError);
-      return errorResponse('登录失败，请稍后重试', 500);
+      return errorResponse('系统错误，请稍后重试', 500);
     }
 
     let user = users?.[0];
@@ -48,7 +48,7 @@ export async function onRequestPost(context) {
 
       if (insertError) {
         console.error('创建用户失败:', insertError);
-        return errorResponse('登录失败，请稍后重试', 500);
+        return errorResponse('注册失败，请稍后重试', 500);
       }
 
       user = newUser;
@@ -77,7 +77,7 @@ export async function onRequestPost(context) {
     });
   } catch (error) {
     console.error('登录失败:', error);
-    return errorResponse('登录失败，请稍后重试', 500);
+    return errorResponse(`登录失败: ${error.message || '未知错误'}`, 500);
   }
 }
 
