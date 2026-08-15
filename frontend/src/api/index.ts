@@ -36,7 +36,8 @@ const adminApi = axios.create({
 });
 
 adminApi.interceptors.request.use((config) => {
-  const adminKey = localStorage.getItem('adminToken');
+  // 优先从 sessionStorage 读（关闭浏览器失效，降低 XSS 长期窃取明文密码风险）
+  const adminKey = sessionStorage.getItem('adminKey') || localStorage.getItem('adminToken');
   if (adminKey) {
     config.headers['X-Admin-Key'] = adminKey;
   }
@@ -47,6 +48,7 @@ adminApi.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      sessionStorage.removeItem('adminKey');
       localStorage.removeItem('adminToken');
       window.location.href = '/admin/login';
     }

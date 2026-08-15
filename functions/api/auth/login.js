@@ -21,6 +21,11 @@ export async function onRequestPost(context) {
       return errorResponse('邮箱不能为空');
     }
 
+    // 邮箱长度限制（防止超长输入打满存储）
+    if (email.length > 254) {
+      return errorResponse('邮箱过长');
+    }
+
     // 简单的邮箱格式校验
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {

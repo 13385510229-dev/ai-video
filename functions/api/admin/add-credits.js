@@ -14,13 +14,19 @@ export async function onRequestPost(context) {
     const body = await request.json();
     const { userId, credits } = body;
 
-    if (!userId || !credits) {
+    if (!userId || credits === undefined || credits === null) {
       return errorResponse('用户ID和次数不能为空');
     }
 
     const creditsNum = parseInt(credits);
     if (isNaN(creditsNum) || creditsNum === 0) {
       return errorResponse('次数必须是有效数字');
+    }
+
+    // 加减范围限制（防止单次操作过大造成溢出或误操作）
+    const MAX_CHANGE = 100000;
+    if (creditsNum > MAX_CHANGE || creditsNum < -MAX_CHANGE) {
+      return errorResponse(`单次调整范围不能超过 ±${MAX_CHANGE}`);
     }
 
     // 初始化 Supabase

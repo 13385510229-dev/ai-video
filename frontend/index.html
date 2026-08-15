@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Htyorin AI 宏图灵境</title>
+
+    <!-- 安全元标签（防御纵深：静态托管不走 Worker 安全头时生效） -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Permissions-Policy" content="accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=()" />
+    <!-- CSP：允许同源 API、允许 Agnes/CF 资源；禁止内联 script/style 之外的危险来源 -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; media-src 'self' https: blob:; connect-src 'self' https: wss: blob:; font-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
+    />
   </head>
   <body class="bg-black text-white">
     <div id="root"></div>

@@ -8,11 +8,24 @@ const FREE_CREDITS = 3;
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
-    const body = await request.json();
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch (_) {
+      return errorResponse('请求格式错误');
+    }
     const { email, code } = body;
 
     if (!email || !code) {
       return errorResponse('邮箱和验证码不能为空');
+    }
+
+    // 长度限制
+    if (email.length > 254) {
+      return errorResponse('邮箱过长');
+    }
+    if (String(code).length > 12) {
+      return errorResponse('验证码格式错误');
     }
 
     // 验证验证码
@@ -54,8 +67,11 @@ export async function onRequestPost(context) {
       user = newUser;
     }
 
-    // 生成 JWT token
-    const jwtSecret = env.JWT_SECRET || 'default-secret-change-me';
+    // 生成 JWT token（禁止使用默认弱密钥）
+    const jwtSecret = env.JWT_SECRET;
+    if (!jwtSecret || jwtSecret === 'default-secret-change-me') {
+      return errorResponse('系统认证配置错误，请联系管理员', 500);
+    }
     const token = await signJWT(
       {
         sub: user.id,
@@ -77,7 +93,8 @@ export async function onRequestPost(context) {
     });
   } catch (error) {
     console.error('登录失败:', error);
-    return errorResponse(`登录失败: ${error.message || '未知错误'}`, 500);
+    // 5xx 错误不暴露内部细节
+    return errorResponse('登录失败，请稍后重试', 500);
   }
 }
 

@@ -13,18 +13,19 @@ export async function onRequestGet(context) {
 
     // 获取查询参数
     const url = new URL(request.url);
-    const keyword = url.searchParams.get('keyword');
-    const page = parseInt(url.searchParams.get('page')) || 1;
-    const pageSize = parseInt(url.searchParams.get('pageSize')) || 20;
+    let keyword = url.searchParams.get('keyword') || '';
+    // 关键词长度限制
+    if (keyword.length > 100) keyword = keyword.slice(0, 100);
+    const page = Math.max(1, parseInt(url.searchParams.get('page')) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize')) || 20));
 
     // 初始化 Supabase
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-    // 构建查询
-    let query = supabase.from('users').select('*');
+    // 构建查询：明确只选择非敏感字段（防止把可能存在的 password_hash / 密钥等带出来）
+    const safeUserColumns = 'id, email, balance, membership_type, membership_expire_at, daily_credits_used, last_daily_reset, created_at';
+    let query = supabase.from('users').select(safeUserColumns);
 
-    // Supabase REST API 的模糊搜索用 ilike
-    // 这里简化处理，先查所有，后面再过滤
     query = query
       .order('created_at', { ascending: false })
       .limit(1000); // 先查 1000 条，用户量小够用

@@ -1,10 +1,10 @@
 // 易支付工具函数
 
 // 生成签名（MD5）- 使用 Web Crypto API，支持中文
-export async function generateSign(params, key) {
+export async function generateSign(params: Record<string, any>, key: string) {
   // 按字母排序参数
   const sortedKeys = Object.keys(params).sort();
-  
+
   // 拼接成 key=value&key=value 格式
   let signStr = '';
   sortedKeys.forEach((k, index) => {
@@ -22,14 +22,28 @@ export async function generateSign(params, key) {
   const encoder = new TextEncoder();
   const data = encoder.encode(signStr);
   const hashBuffer = await crypto.subtle.digest('MD5', data);
-  
+
   // 转成十六进制字符串（小写）
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 时间安全的字符串比较（防时序攻击）
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const aBuf = enc.encode(a);
+  const bBuf = enc.encode(b);
+  if (aBuf.byteLength !== bBuf.byteLength) {
+    // 长度不等也跑一次比较，避免被长度判断
+    const dummy = new Uint8Array(Math.max(aBuf.byteLength, bBuf.byteLength));
+    await crypto.subtle.digest('SHA-256', dummy);
+    return false;
+  }
+  return crypto.subtle.timingSafeEqual(aBuf, bBuf);
 }
 
 // 验证签名
-export async function verifySign(params, key) {
+export async function verifySign(params: Record<string, any>, key: string) {
   const sign = params.sign;
   if (!sign) return false;
 
@@ -39,5 +53,5 @@ export async function verifySign(params, key) {
   delete paramsToSign.sign_type;
 
   const calculatedSign = await generateSign(paramsToSign, key);
-  return calculatedSign === sign.toLowerCase();
+  return timingSafeEqual(calculatedSign, String(sign).toLowerCase());
 }

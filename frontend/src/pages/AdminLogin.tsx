@@ -9,8 +9,9 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const adminToken = localStorage.getItem('adminToken');
-    if (adminToken) {
+    // 管理员凭据仅用 sessionStorage 存（关闭浏览器自动清除，降低被 XSS 长期窃取明文密码风险）
+    const adminKey = sessionStorage.getItem('adminKey');
+    if (adminKey) {
       navigate('/admin');
     }
   }, [navigate]);
@@ -27,7 +28,10 @@ const AdminLogin = () => {
     try {
       const res = await adminLogin(password);
       if (res.data.success) {
-        localStorage.setItem('adminToken', password);
+        // 管理员密码仅存 sessionStorage（非持久化 localStorage）
+        sessionStorage.setItem('adminKey', password);
+        // 兼容旧命名的清理
+        localStorage.removeItem('adminToken');
         navigate('/admin');
       } else {
         setError(res.data.message || '登录失败');
@@ -78,7 +82,7 @@ const AdminLogin = () => {
 
           <div className="mt-6 pt-6 border-t border-gray-800">
             <p className="text-xs text-gray-500 text-center">
-              默认密码：admin123（请在环境变量中修改）
+              管理员密码通过系统环境变量配置
             </p>
           </div>
         </div>

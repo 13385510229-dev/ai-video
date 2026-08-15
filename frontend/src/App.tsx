@@ -31,8 +31,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const adminToken = localStorage.getItem('adminToken');
-  if (!adminToken) {
+  // 管理员密码只存 sessionStorage（关闭浏览器自动失效），兼容读取旧命名
+  const adminKey = sessionStorage.getItem('adminKey') || localStorage.getItem('adminToken');
+  if (!adminKey) {
+    // 迁移清理：旧的 localStorage 里的敏感密码要删掉
+    localStorage.removeItem('adminToken');
     return <Navigate to="/admin/login" replace />;
   }
   return <>{children}</>;

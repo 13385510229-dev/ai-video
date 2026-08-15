@@ -127,13 +127,15 @@ export async function onRequestPost(context) {
         newBalance,
       });
     } else {
-      // 会员：根据金额判断类型
-      const amount = parseFloat(order.amount);
-      let planType = 'monthly';
-      
-      if (Math.abs(amount - 39) < 0.01) planType = 'monthly';
-      else if (Math.abs(amount - 99) < 0.01) planType = 'quarterly';
-      else if (Math.abs(amount - 299) < 0.01) planType = 'yearly';
+      // 会员：优先使用订单中存储的 membership_type（更可靠），否则从金额推断
+      let planType = order.membership_type;
+      if (!planType) {
+        const amount = parseFloat(order.amount);
+        if (Math.abs(amount - 29) < 0.01) planType = 'monthly';
+        else if (Math.abs(amount - 69) < 0.01) planType = 'quarterly';
+        else if (Math.abs(amount - 199) < 0.01) planType = 'yearly';
+        else planType = 'monthly'; // 默认兜底
+      }
 
       const result = await activateMembership(
         order.user_id,

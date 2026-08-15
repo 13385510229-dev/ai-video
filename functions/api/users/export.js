@@ -59,16 +59,17 @@ export async function onRequestPost(context) {
       totalOrders: (orders || []).length,
     };
 
+    // 使用严格 CORS 和安全响应头
+    const { securityHeaders, getCorsHeaders } = await import('../_lib/auth.js');
+    const corsHeaders = getCorsHeaders(request, env);
+
     return new Response(JSON.stringify(exportData, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="user-data-${userId}-${Date.now()}.json"`,
-        ...{
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
+        ...securityHeaders,
+        ...corsHeaders,
       },
     });
   } catch (error) {
@@ -77,6 +78,9 @@ export async function onRequestPost(context) {
   }
 }
 
-export async function onRequestOptions() {
+export async function onRequestOptions(context) {
+  if (context?.request && context?.env) {
+    return handleOptions(context.request, context.env);
+  }
   return handleOptions();
 }

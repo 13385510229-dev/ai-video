@@ -2,10 +2,23 @@
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { verifySign } from '../_lib/epay.js';
 import { activateMembership } from '../_lib/membership.js';
+import { securityHeaders, rateLimit, errorResponse } from '../_lib/auth.js';
 
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
+
+    // 支付回调也限流：防止恶意请求打满数据库（每分钟最多 60 次）
+    try {
+      const rate = await rateLimit(request, env, {
+        max: 60,
+        windowSeconds: 60,
+        prefix: 'ratelimit:pay-notify',
+      });
+      if (!rate.allowed) {
+        return new Response('fail', { status: 429, headers: { ...securityHeaders } });
+      }
+    } catch (_) {}
 
     // 获取表单数据
     const formData = await request.formData();
@@ -20,14 +33,14 @@ export async function onRequestPost(context) {
     const epayKey = env.EPAY_KEY;
     if (!await verifySign(params, epayKey)) {
       console.error('签名验证失败');
-      return new Response('fail', { status: 400 });
+      return new Response('fail', { status: 400, headers: { ...securityHeaders } });
     }
 
     // 检查支付状态
     const tradeStatus = params.trade_status || params.status || params.pay_status;
     if (tradeStatus !== 'TRADE_SUCCESS' && tradeStatus !== '1' && tradeStatus !== 'success') {
       console.log('支付未成功，状态:', tradeStatus);
-      return new Response('success'); // 返回 success，避免易支付一直重试
+      return new Response('success', { status: 200, headers: { ...securityHeaders } }); // 返回 success，避免易支付一直重试
     }
 
     const orderNo = params.out_trade_no;
@@ -36,7 +49,7 @@ export async function onRequestPost(context) {
 
     if (!orderNo) {
       console.error('缺少订单号');
-      return new Response('fail', { status: 400 });
+      return new Response('fail', { status: 400, headers: { ...securityHeaders } });
     }
 
     const supabaseUrl = env.SUPABASE_URL;
@@ -52,13 +65,13 @@ export async function onRequestPost(context) {
 
     if (!orderQueryRes.ok) {
       console.error('查询订单失败');
-      return new Response('fail', { status: 500 });
+      return new Response('fail', { status: 500, headers: { ...securityHeaders } });
     }
 
     const orders = await orderQueryRes.json();
     if (!orders?.[0]) {
       console.error('订单不存在:', orderNo);
-      return new Response('fail', { status: 404 });
+      return new Response('fail', { status: 404, headers: { ...securityHeaders } });
     }
 
     const order = orders[0];
@@ -66,13 +79,13 @@ export async function onRequestPost(context) {
     // 如果已经支付过了，直接返回成功（幂等处理）
     if (order.status === 'paid') {
       console.log('订单已支付，跳过处理:', orderNo);
-      return new Response('success');
+      return new Response('success', { status: 200, headers: { ...securityHeaders } });
     }
 
     // 验证金额是否一致（允许 0.01 的误差）
     if (Math.abs(parseFloat(order.amount) - totalFee) > 0.01) {
       console.error('金额不匹配:', order.amount, 'vs', totalFee);
-      return new Response('fail', { status: 400 });
+      return new Response('fail', { status: 400, headers: { ...securityHeaders } });
     }
 
     // 第二步：处理订单（先加次数，再更新订单状态，确保用户不会亏）
@@ -101,7 +114,7 @@ export async function onRequestPost(context) {
         const users = await userQueryRes.json();
         if (!users?.[0]) {
           console.error('用户不存在:', order.user_id);
-          return new Response('fail', { status: 404 });
+          return new Response('fail', { status: 404, headers: { ...securityHeaders } });
         }
 
         const currentBalance = users[0].balance || 0;
@@ -142,7 +155,7 @@ export async function onRequestPost(context) {
       
       if (!addSuccess) {
         console.error('加次数失败，3 次重试都失败了');
-        return new Response('fail', { status: 500 });
+        return new Response('fail', { status: 500, headers: { ...securityHeaders } });
       }
       
       // 加次数成功后，再更新订单状态（即使更新失败也没关系，用户已经拿到次数了）
@@ -201,7 +214,7 @@ export async function onRequestPost(context) {
         
         if (!activateSuccess) {
           console.error('开通会员失败，3 次重试都失败了');
-          return new Response('fail', { status: 500 });
+          return new Response('fail', { status: 500, headers: { ...securityHeaders } });
         }
 
         console.log('会员开通成功:', orderNo, planType);
@@ -227,10 +240,10 @@ export async function onRequestPost(context) {
     }
 
     // 返回 success 给易支付
-    return new Response('success');
+    return new Response('success', { status: 200, headers: { ...securityHeaders } });
   } catch (error) {
     console.error('支付回调处理失败:', error);
-    return new Response('fail', { status: 500 });
+    return new Response('fail', { status: 500, headers: { ...securityHeaders } });
   }
 }
 
@@ -240,5 +253,5 @@ export async function onRequestGet(context) {
 }
 
 export async function onRequestOptions() {
-  return new Response('', { status: 200 });
+  return new Response('', { status: 200, headers: { ...securityHeaders } });
 }

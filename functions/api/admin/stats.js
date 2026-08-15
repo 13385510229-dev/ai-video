@@ -14,31 +14,32 @@ export async function onRequestGet(context) {
     // 初始化 Supabase
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-    // 统计用户数
+    // 统计用户数（head:true 只返回 count，不返回数据行，避免大表拖垮）
     const { count: userCount, error: userError } = await supabase
       .from('users')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact', head: true });
 
     // 统计订单数
     const { count: orderCount, error: orderError } = await supabase
       .from('orders')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact', head: true });
 
-    // 统计已支付订单
+    // 统计已支付订单（只取需要的字段，限制最多 10000 条防止超时）
     const { data: paidOrders, error: paidError } = await supabase
       .from('orders')
       .select('amount, credits')
-      .eq('status', 'paid');
+      .eq('status', 'paid')
+      .limit(10000);
 
     // 统计视频数
     const { count: videoCount, error: videoError } = await supabase
       .from('videos')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact', head: true });
 
     // 待确认订单数
     const { count: pendingCount, error: pendingError } = await supabase
       .from('orders')
-      .select('*', { count: 'exact' })
+      .select('*', { count: 'exact', head: true })
       .eq('status', 'pending');
 
     // 计算总营收

@@ -14,8 +14,12 @@ export async function onRequestGet(context) {
     // 获取查询参数
     const url = new URL(request.url);
     const status = url.searchParams.get('status');
-    const page = parseInt(url.searchParams.get('page')) || 1;
-    const pageSize = parseInt(url.searchParams.get('pageSize')) || 20;
+    // status 白名单校验
+    if (status && !['pending', 'paid', 'failed', 'cancelled'].includes(status)) {
+      return errorResponse('状态参数非法');
+    }
+    const page = Math.max(1, parseInt(url.searchParams.get('page')) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize')) || 20));
 
     // 初始化 Supabase
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);

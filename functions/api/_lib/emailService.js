@@ -1,12 +1,13 @@
 // 邮件服务 - 支持 Resend API 和模拟模式
 // Cloudflare Workers 不支持 SMTP，所以用 HTTP API 方式
+import { generateCode as secureGenerateCode } from './auth.js';
 
 // 降级用的内存存储（当 KV 不可用时）
 const verificationCodes = new Map();
 
 // 发送验证码
 export async function sendVerificationCode(email, env) {
-  const code = generateCode();
+  const code = secureGenerateCode(6); // 使用 auth.js 中的安全随机数生成
   const expiresAt = Date.now() + 10 * 60 * 1000;
   const data = JSON.stringify({ code, expiresAt });
 
@@ -131,11 +132,4 @@ export async function verifyCode(email, code, env) {
   return { valid: true };
 }
 
-// 生成 6 位数字验证码
-function generateCode() {
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += Math.floor(Math.random() * 10);
-  }
-  return code;
-}
+// 注意：验证码生成现在使用 auth.js 中的 generateCode()（crypto.getRandomValues 安全随机）

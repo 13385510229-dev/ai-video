@@ -1,4 +1,4 @@
-import { jsonResponse, errorResponse, handleOptions, requireAuth } from '../_lib/auth.js';
+import { jsonResponse, errorResponse, handleOptions, requireAuth, rateLimit } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { MEMBERSHIP_PLANS } from '../_lib/membership.js';
 import { generateSign } from '../_lib/epay.js';
@@ -20,19 +20,33 @@ const membershipPackages = [
 // 所有套餐
 const allPackages = [...creditPackages, ...membershipPackages];
 
-// 生成订单号
-function generateOrderNo() {
+// 允许的支付方式（白名单）
+const ALLOWED_PAY_TYPES = ['alipay', 'wxpay'];
+
+// 生成订单号（使用 crypto 安全随机数，避免碰撞和预测）
+function generateOrderNo(): string {
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  const random = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+  const randBuf = new Uint32Array(2);
+  crypto.getRandomValues(randBuf);
+  const random = (randBuf[0] % 1000000).toString().padStart(6, '0')
+    + (randBuf[1] % 1000).toString().padStart(3, '0');
   return `ORD${year}${month}${day}${random}`;
 }
 
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
+
+    // 创建订单限速：每分钟最多 10 次
+    const rate = await rateLimit(request, env, {
+      max: 10,
+      windowSeconds: 60,
+      prefix: 'ratelimit:create-order',
+    });
+    if (!rate.allowed) return rate.response!;
 
     // 认证
     const authResult = await requireAuth(request, env);
@@ -41,8 +55,18 @@ export async function onRequestPost(context) {
     }
 
     const userId = parseInt(authResult.user.sub, 10) || authResult.user.sub;
-    const body = await request.json();
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch (_) {
+      return errorResponse('请求格式错误');
+    }
     const { packageId, payType } = body;
+
+    // payType 白名单校验
+    if (payType && !ALLOWED_PAY_TYPES.includes(String(payType))) {
+      return errorResponse('支付方式参数非法');
+    }
 
     // 查找套餐
     const pkg = allPackages.find(p => p.id === packageId);

@@ -42,7 +42,7 @@ export async function onRequest(context) {
 
     if (findError) {
       console.error('查询图片失败:', findError);
-      return errorResponse(`查询失败: ${findError.message || JSON.stringify(findError)}`, 500);
+      return errorResponse('查询失败，请稍后重试', 500);
     }
 
     if (!images?.[0]) {
@@ -57,7 +57,7 @@ export async function onRequest(context) {
 
     if (deleteError) {
       console.error('删除图片错误:', deleteError);
-      return errorResponse(`删除失败: ${deleteError.message || JSON.stringify(deleteError)}`, 500);
+      return errorResponse('删除失败，请稍后重试', 500);
     }
 
     return jsonResponse({
@@ -66,6 +66,7 @@ export async function onRequest(context) {
     });
   } catch (error) {
     console.error('删除图片接口错误:', error);
-    return errorResponse(`服务器错误: ${error.message || '未知错误'}`, 500);
+    // 5xx 错误不暴露内部细节
+    return errorResponse('删除失败，请稍后重试', 500);
   }
 }
