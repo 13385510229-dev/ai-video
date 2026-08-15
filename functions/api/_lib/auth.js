@@ -330,6 +330,27 @@ export function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: safeMessage }, status);
 }
 
+// 扩展错误响应：可附带 error_code / details / retry_after_ms 等结构化字段给前端做分类提示
+export function errorResponseEx(
+  message: string,
+  opts: {
+    status?: number;
+    error_code?: string;
+    details?: any;
+    retry_after_ms?: number;
+  } = {}
+) {
+  const status = opts.status || 400;
+  const safeMessage = status >= 500 ? '服务器内部错误，请稍后重试' : message;
+  const body: any = { error: safeMessage };
+  if (opts.error_code) body.error_code = opts.error_code;
+  if (opts.details !== undefined) body.details = opts.details;
+  if (typeof opts.retry_after_ms === 'number' && isFinite(opts.retry_after_ms)) {
+    body.retry_after_ms = opts.retry_after_ms;
+  }
+  return jsonResponse(body, status);
+}
+
 export function errorResponseCors(request: Request, env: Record<string, any>, message: string, status = 400) {
   const safeMessage = status >= 500 ? '服务器内部错误，请稍后重试' : message;
   return jsonResponseCors(request, env, { error: safeMessage }, status);

@@ -21,11 +21,20 @@ export default function FriendlyErrorBox({ error, onRetry, onDismiss, className 
     error.category === 'AUTH_UNAUTHORIZED' ||
     error.category === 'AUTH_FORBIDDEN'
       ? 'border-orange-200 bg-orange-50 text-orange-700'
-      : error.category === 'RATE_LIMIT' || error.category === 'CREDIT_CONCURRENT'
+      : error.category === 'RATE_LIMIT' ||
+          error.category === 'CREDIT_CONCURRENT' ||
+          error.category === 'UPSTREAM_BUSY' ||
+          error.category === 'UPSTREAM_LIMIT'
         ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
         : error.category === 'NETWORK' || error.category === 'SERVER_ERROR'
           ? 'border-purple-200 bg-purple-50 text-purple-700'
-          : 'border-red-200 bg-red-50 text-red-700';
+          : error.category === 'UPSTREAM_ADMIN'
+            ? 'border-rose-200 bg-rose-50 text-rose-700'
+            : error.category === 'UPSTREAM_TEMP'
+              ? 'border-sky-200 bg-sky-50 text-sky-700'
+              : error.category === 'UPSTREAM_BAD_INPUT'
+                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                : 'border-red-200 bg-red-50 text-red-700';
 
   const icon =
     error.category === 'CREDIT_BALANCE' ||
@@ -44,7 +53,29 @@ export default function FriendlyErrorBox({ error, onRetry, onDismiss, className 
                 ? '🖼️'
                 : error.category === 'INPUT_VALIDATION'
                   ? '📝'
-                  : '❌';
+                  : error.category === 'UPSTREAM_BUSY'
+                    ? '🚦'
+                    : error.category === 'UPSTREAM_LIMIT'
+                      ? '🛑'
+                      : error.category === 'UPSTREAM_ADMIN'
+                        ? '👨‍💻'
+                        : error.category === 'UPSTREAM_TEMP'
+                          ? '⚡'
+                          : error.category === 'UPSTREAM_BAD_INPUT'
+                            ? '🧹'
+                            : '❌';
+
+  // 展示「重试」按钮的类别：网络/5xx/并发冲突/限流/上游排队/上游限流/上游临时故障/未知
+  const shouldShowRetry =
+    !!onRetry &&
+    (error.category === 'NETWORK' ||
+      error.category === 'SERVER_ERROR' ||
+      error.category === 'CREDIT_CONCURRENT' ||
+      error.category === 'RATE_LIMIT' ||
+      error.category === 'UPSTREAM_BUSY' ||
+      error.category === 'UPSTREAM_LIMIT' ||
+      error.category === 'UPSTREAM_TEMP' ||
+      error.category === 'UNKNOWN');
 
   return (
     <div
@@ -83,21 +114,16 @@ export default function FriendlyErrorBox({ error, onRetry, onDismiss, className 
                 <span aria-hidden>↗</span>
               </a>
             )}
-            {onRetry &&
-              (error.category === 'NETWORK' ||
-                error.category === 'SERVER_ERROR' ||
-                error.category === 'CREDIT_CONCURRENT' ||
-                error.category === 'RATE_LIMIT' ||
-                error.category === 'UNKNOWN') && (
-                <button
-                  type="button"
-                  onClick={onRetry}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white/70 border border-current/30 hover:bg-white font-medium text-xs transition-colors"
-                >
-                  重试
-                  <span aria-hidden>↻</span>
-                </button>
-              )}
+            {shouldShowRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white/70 border border-current/30 hover:bg-white font-medium text-xs transition-colors"
+              >
+                重试
+                <span aria-hidden>↻</span>
+              </button>
+            )}
           </div>
         </div>
 

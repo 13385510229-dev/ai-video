@@ -1,7 +1,23 @@
-import { jsonResponse, errorResponse, handleOptions, requireAuth, rateLimit } from '../_lib/auth.js';
+import { jsonResponse, errorResponse, errorResponseEx, handleOptions, requireAuth, rateLimit } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { createVideoTask, calculateCost } from '../_lib/videoService.js';
-import { deductCredits } from '../_lib/membership.js';
+import { deductCredits, ERROR_CODES } from '../_lib/membership.js';
+import { acquireUpstreamSeat, releaseUpstreamSeat } from '../_lib/upstreamSemaphore.js';
+
+// 把 videoService 抛出的结构化 UpstreamError 映射到 ERROR_CODES
+function upstreamToErrorCode(type) {
+  switch (type) {
+    case 'UPSTREAM_AUTH': return ERROR_CODES.UPSTREAM_AUTH;
+    case 'UPSTREAM_BALANCE': return ERROR_CODES.UPSTREAM_BALANCE;
+    case 'UPSTREAM_RATE_LIMIT': return ERROR_CODES.UPSTREAM_RATE_LIMIT;
+    case 'UPSTREAM_OVERLOAD': return ERROR_CODES.UPSTREAM_OVERLOAD;
+    case 'UPSTREAM_TIMEOUT': return ERROR_CODES.UPSTREAM_TIMEOUT;
+    case 'UPSTREAM_NETWORK': return ERROR_CODES.UPSTREAM_NETWORK;
+    case 'UPSTREAM_BAD_REQUEST': return ERROR_CODES.UPSTREAM_BAD_REQUEST;
+    case 'UPSTREAM_5XX': return ERROR_CODES.UPSTREAM_5XX;
+    default: return null;
+  }
+}
 
 // 输入参数白名单 + 长度限制
 function sanitizeString(s: any, maxLen = 1000): string {
@@ -85,8 +101,25 @@ export async function onRequestPost(context) {
     // 计算成本
     const cost = calculateCost(cleanDuration);
 
-    // ========== 先扣次数，再调用 Agnes ==========
-    // 这样扣费失败就直接拒绝，不会白嫖 Agnes
+    // ========== 先拿上游并发席位，不先扣费 ==========
+    // 如果 Agnes 上游的并发已经满了，直接告诉用户"稍后再试"，不会碰用户任何余额，
+    // 避免"先扣钱再发现模型打不进去、再退款，用户余额闪变"的极差体验。
+    const sem = await acquireUpstreamSeat('video', env);
+    if (!sem.acquired) {
+      const retrySec = Math.max(3, Math.ceil((sem.retryAfterMs || 5000) / 1000));
+      return errorResponseEx(
+        `当前正在生成视频的人较多（${sem.currentCount || '已有'}/${sem.max || '上限'}），系统为避免请求被模型方拒绝而暂未为您创建任务。`,
+        {
+          status: 429,
+          error_code: ERROR_CODES.UPSTREAM_BUSY,
+          retry_after_ms: sem.retryAfterMs || 5000,
+          details: { current: sem.currentCount, max: sem.max, retrySec },
+        }
+      );
+    }
+
+    // ========== 扣次数 ==========
+    // 扣费失败，直接释放上游席位给别人使用
     const deductResult = await deductCredits(
       userId,
       cost,
@@ -95,7 +128,17 @@ export async function onRequestPost(context) {
       env.SUPABASE_SERVICE_ROLE_KEY
     );
     if (!deductResult.success) {
-      return errorResponse(deductResult.error || '余额不足，请充值后再生成');
+      try {
+        await releaseUpstreamSeat('video', sem.token, env);
+      } catch (_) {}
+      return errorResponseEx(deductResult.error || '余额不足，请充值后再生成', {
+        status: 400,
+        error_code: deductResult.error_code || ERROR_CODES.BALANCE_INSUFFICIENT,
+        details: {
+          need: deductResult.need,
+          have: deductResult.have,
+        },
+      });
     }
 
     // ========== 扣费成功，调用 Agnes 创建任务 ==========
@@ -117,14 +160,35 @@ export async function onRequestPost(context) {
         env
       );
     } catch (taskError: any) {
-      // Agnes 调用失败，需要回滚已扣次数
-      console.warn('Agnes 视频任务创建失败，准备退还次数:', taskError?.message);
+      // Agnes 调用失败，释放席位并退还次数
+      try {
+        await releaseUpstreamSeat('video', sem.token, env);
+      } catch (_) {}
       try {
         await rollbackDeducted(userId, cost, deductResult.used_daily, env);
       } catch (rbErr) {
         console.error('退还次数失败:', rbErr);
       }
-      return errorResponse('视频生成失败，请稍后重试');
+      const mappedCode = upstreamToErrorCode(taskError?.upstreamType);
+      if (mappedCode) {
+        return errorResponseEx(
+          '视频生成失败：模型方临时返回异常。请稍候重试；如果持续失败，请联系管理员。',
+          {
+            status: 502,
+            error_code: mappedCode,
+            details: {
+              upstream_status: taskError?.upstreamStatus || 0,
+              upstream_type: taskError?.upstreamType,
+            },
+          }
+        );
+      }
+      return errorResponse(taskError?.message || '视频生成失败，请稍后重试', 502);
+    } finally {
+      // Agnes 异步任务创建成功后，席位就不再占用（模型内部自己排队），立刻释放给下一个请求
+      try {
+        await releaseUpstreamSeat('video', sem.token, env);
+      } catch (_) {}
     }
 
     // Agnes 降级到模拟模式（免费），也退回次数 —— 避免用户以为用了但实际没生成

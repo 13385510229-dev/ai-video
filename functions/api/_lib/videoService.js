@@ -1,6 +1,45 @@
 // 视频生成服务 - Agnes AI
 // 纯 fetch 实现，无外部依赖
 
+// 上游错误类型（供上层判断是退款还是重试）
+export const UPSTREAM_ERROR_TYPES = {
+  AUTH: 'UPSTREAM_AUTH',      // 401：我们的 API Key 过期或没权限
+  BALANCE: 'UPSTREAM_BALANCE',// 402：Agnes 账户余额/额度用完（需要管理员充值）
+  RATE_LIMIT: 'UPSTREAM_RATE_LIMIT', // 429：Agnes 限流
+  OVERLOAD: 'UPSTREAM_OVERLOAD',     // 502/503/504：Agnes 过载
+  SERVER_5XX: 'UPSTREAM_5XX',        // 其他 5xx
+  TIMEOUT: 'UPSTREAM_TIMEOUT',       // AbortSignal 超时
+  NETWORK: 'UPSTREAM_NETWORK',       // DNS/TLS/连接错误
+  BAD_REQUEST: 'UPSTREAM_BAD_REQUEST',// 400：参数问题
+  UNKNOWN: 'UPSTREAM_UNKNOWN',
+};
+
+// 分类 HTTP 状态码
+function classifyStatus(status) {
+  if (!status) return UPSTREAM_ERROR_TYPES.NETWORK;
+  if (status === 401) return UPSTREAM_ERROR_TYPES.AUTH;
+  if (status === 402 || status === 403) return UPSTREAM_ERROR_TYPES.BALANCE;
+  if (status === 429) return UPSTREAM_ERROR_TYPES.RATE_LIMIT;
+  if (status === 400 || status === 422) return UPSTREAM_ERROR_TYPES.BAD_REQUEST;
+  if (status === 502 || status === 503 || status === 504) return UPSTREAM_ERROR_TYPES.OVERLOAD;
+  if (status >= 500) return UPSTREAM_ERROR_TYPES.SERVER_5XX;
+  if (status >= 400) return UPSTREAM_ERROR_TYPES.UNKNOWN;
+  return UPSTREAM_ERROR_TYPES.UNKNOWN;
+}
+
+function makeUpstreamError({ type, status, message, raw }) {
+  const err = new Error(message || `Upstream error ${type}`);
+  err.name = 'UpstreamError';
+  err.upstreamType = type;
+  err.upstreamStatus = status || 0;
+  err.upstreamRaw = raw || '';
+  return err;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // 计算 num_frames 和 frame_rate
 // 3/5/10秒：24fps 官方推荐；18秒：18fps 避开1080p帧数限制
 function calculateFrames(duration) {
@@ -145,46 +184,94 @@ export async function createVideoTask(params, env) {
     imageCount: images?.length || 0,
   });
 
-  // 直接请求，不重试
-  console.log('开始调用 Agnes API，模式:', mode, '时长:', duration, '比例:', aspect_ratio);
-  const startTime = Date.now();
-  
-  try {
-    const res = await fetch(`${apiBase}/videos`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(480000),
-    });
+  // 可重试的上游类型：429 限流、502/503/504 过载、网络抖动、超时（偶尔）
+  const RETRYABLE = new Set([
+    UPSTREAM_ERROR_TYPES.RATE_LIMIT,
+    UPSTREAM_ERROR_TYPES.OVERLOAD,
+    UPSTREAM_ERROR_TYPES.NETWORK,
+    UPSTREAM_ERROR_TYPES.TIMEOUT,
+    UPSTREAM_ERROR_TYPES.SERVER_5XX,
+  ]);
+  const MAX_RETRIES = 2; // 最多额外重试 2 次
+  const backoff = [1500, 4000]; // 1.5s, 4s
 
-    const elapsed = Date.now() - startTime;
-    console.log('Agnes API 返回，耗时:', elapsed, 'ms，状态:', res.status);
+  let lastErr = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    console.log(`开始调用 Agnes API（视频）第 ${attempt + 1}/${MAX_RETRIES + 1} 次，模式:${mode} 时长:${duration}`);
+    const startTime = Date.now();
+    try {
+      const res = await fetch(`${apiBase}/videos`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(480000),
+      });
 
-    if (!res.ok) {
-      const err = await res.text().catch(() => '');
-      throw new Error(`API error ${res.status}: ${err}`);
+      const elapsed = Date.now() - startTime;
+      console.log('Agnes Video API 返回，耗时:', elapsed, 'ms，状态:', res.status);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        const type = classifyStatus(res.status);
+        // 把 Agnes 原始错误尽量截短，方便排查
+        const rawSnippet = (errText || '').slice(0, 500);
+        lastErr = makeUpstreamError({
+          type,
+          status: res.status,
+          message: `Agnes Video ${res.status}: ${rawSnippet || 'no response body'}`,
+          raw: rawSnippet,
+        });
+      } else {
+        const data = await res.json();
+        const taskId = data.id || data.task_id || (data.data && data.data.id);
+        const videoId = data.video_id || (data.data && data.data.video_id);
+
+        console.log('任务创建成功，task_id:', taskId, 'video_id:', videoId);
+
+        return {
+          task_id: taskId,
+          video_id: videoId,
+          status: 'processing',
+          mode: 'agnes',
+        };
+      }
+    } catch (rawErr) {
+      const elapsed = Date.now() - startTime;
+      // 先判断超时/网络
+      let type = UPSTREAM_ERROR_TYPES.NETWORK;
+      if (rawErr?.name === 'TimeoutError' || String(rawErr?.message || '').toLowerCase().includes('timeout')) {
+        type = UPSTREAM_ERROR_TYPES.TIMEOUT;
+      } else if (rawErr?.upstreamType) {
+        // 已经是结构化的 UpstreamError
+        type = rawErr.upstreamType;
+      }
+      lastErr = makeUpstreamError({
+        type,
+        status: rawErr?.upstreamStatus || 0,
+        message: `Agnes Video ${type}: ${rawErr?.message || rawErr}`,
+        raw: String(rawErr?.message || rawErr || '').slice(0, 500),
+      });
+      console.error(`Agnes Video 调用异常（${elapsed}ms, 尝试 ${attempt + 1}/${MAX_RETRIES + 1}）：${lastErr.message}`);
     }
 
-    const data = await res.json();
-    const taskId = data.id || data.task_id || (data.data && data.data.id);
-    const videoId = data.video_id || (data.data && data.data.video_id);
-
-    console.log('任务创建成功，task_id:', taskId, 'video_id:', videoId);
-
-    return {
-      task_id: taskId,
-      video_id: videoId,
-      status: 'processing',
-      mode: 'agnes',
-    };
-  } catch (error) {
-    const elapsed = Date.now() - startTime;
-    console.error('Agnes API 调用失败，耗时:', elapsed, 'ms，错误:', error.message);
-    throw error;
+    // 到这里说明本轮失败：如果是可重试类型且还有额度，sleep 后再试
+    if (RETRYABLE.has(lastErr?.upstreamType) && attempt < MAX_RETRIES) {
+      const waitMs = backoff[attempt] || 2000;
+      console.log(`Agnes Video ${lastErr.upstreamType}，${waitMs}ms 后重试...`);
+      await sleep(waitMs + Math.floor(Math.random() * 1000));
+      continue;
+    }
+    break;
   }
+
+  // 所有尝试都失败：抛出最后一个结构化错误
+  throw lastErr || makeUpstreamError({
+    type: UPSTREAM_ERROR_TYPES.UNKNOWN,
+    message: 'Agnes Video 调用失败',
+  });
 }
 
 // 查询视频任务状态
@@ -233,6 +320,11 @@ export async function getVideoTaskStatus(taskId, env, videoId = null) {
     }
 
     if (!res.ok) {
+      // 这里查询状态的失败不要直接 throw：可能只是短暂超时，返回 processing 让前端下次再查
+      // 但是 401/403/404 记录一下便于排查
+      if (res.status === 401 || res.status === 403) {
+        console.warn('查询视频状态被 401/403：可能 API Key 过期');
+      }
       throw new Error(`API error ${res.status}`);
     }
 

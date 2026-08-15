@@ -7,6 +7,15 @@
 //   TOTAL_INSUFFICIENT     今日+余额都不够
 //   CONCURRENT_CONFLICT    高并发冲突，提示稍后重试
 //   INVALID_COST           非法扣减次数（<=0或太大）
+//   UPSTREAM_BUSY          上游 Agnes 全局并发位已满（没扣费，稍后再试）
+//   UPSTREAM_AUTH          上游 API Key 失效/无权限（需要管理员）
+//   UPSTREAM_BALANCE       上游 Agnes 账户余额不足（需要管理员充值）
+//   UPSTREAM_RATE_LIMIT    上游 Agnes 限流（429，用户稍后再试）
+//   UPSTREAM_OVERLOAD      上游过载（502/503/504，稍后再试）
+//   UPSTREAM_TIMEOUT       上游超时，稍后再试
+//   UPSTREAM_NETWORK       我们的服务到上游的网络异常
+//   UPSTREAM_5XX           上游其他服务器错误
+//   UPSTREAM_BAD_REQUEST   上游 400/422（提示词里可能有违规词/参数有问题）
 //
 
 export const ERROR_CODES = {
@@ -16,6 +25,15 @@ export const ERROR_CODES = {
   TOTAL_INSUFFICIENT: 'TOTAL_INSUFFICIENT',
   CONCURRENT_CONFLICT: 'CONCURRENT_CONFLICT',
   INVALID_COST: 'INVALID_COST',
+  UPSTREAM_BUSY: 'UPSTREAM_BUSY',
+  UPSTREAM_AUTH: 'UPSTREAM_AUTH',
+  UPSTREAM_BALANCE: 'UPSTREAM_BALANCE',
+  UPSTREAM_RATE_LIMIT: 'UPSTREAM_RATE_LIMIT',
+  UPSTREAM_OVERLOAD: 'UPSTREAM_OVERLOAD',
+  UPSTREAM_TIMEOUT: 'UPSTREAM_TIMEOUT',
+  UPSTREAM_NETWORK: 'UPSTREAM_NETWORK',
+  UPSTREAM_5XX: 'UPSTREAM_5XX',
+  UPSTREAM_BAD_REQUEST: 'UPSTREAM_BAD_REQUEST',
 };
 
 // 会员套餐配置

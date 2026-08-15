@@ -1,6 +1,21 @@
-import { jsonResponse, errorResponse, handleOptions, requireAuth, rateLimit } from '../_lib/auth.js';
+import { jsonResponse, errorResponse, errorResponseEx, handleOptions, requireAuth, rateLimit } from '../_lib/auth.js';
 import { generateImage } from '../_lib/imageService.js';
-import { deductCredits } from '../_lib/membership.js';
+import { deductCredits, ERROR_CODES } from '../_lib/membership.js';
+import { acquireUpstreamSeat, releaseUpstreamSeat } from '../_lib/upstreamSemaphore.js';
+
+function upstreamToErrorCode(type) {
+  switch (type) {
+    case 'UPSTREAM_AUTH': return ERROR_CODES.UPSTREAM_AUTH;
+    case 'UPSTREAM_BALANCE': return ERROR_CODES.UPSTREAM_BALANCE;
+    case 'UPSTREAM_RATE_LIMIT': return ERROR_CODES.UPSTREAM_RATE_LIMIT;
+    case 'UPSTREAM_OVERLOAD': return ERROR_CODES.UPSTREAM_OVERLOAD;
+    case 'UPSTREAM_TIMEOUT': return ERROR_CODES.UPSTREAM_TIMEOUT;
+    case 'UPSTREAM_NETWORK': return ERROR_CODES.UPSTREAM_NETWORK;
+    case 'UPSTREAM_BAD_REQUEST': return ERROR_CODES.UPSTREAM_BAD_REQUEST;
+    case 'UPSTREAM_5XX': return ERROR_CODES.UPSTREAM_5XX;
+    default: return null;
+  }
+}
 
 function sanitizeString(s: any, maxLen = 1000): string {
   if (typeof s !== 'string') return '';
@@ -69,7 +84,25 @@ export async function onRequestPost(context) {
 
     const cost = 1;
 
-    // ========== 先扣次数，再调用 Agnes ==========
+    // ========== 先拿上游并发席位，不先扣费 ==========
+    // 图片接口是同步接口（每个请求占一个上游连接直到生成完毕，最多 120s）。
+    // 如果我们不主动限制并发，Agnes 会用 429 拒掉 90%，然后我们的服务就会陷入大量
+    // 扣费-回滚的闪变，用户体验极差。
+    const sem = await acquireUpstreamSeat('image', env);
+    if (!sem.acquired) {
+      const retrySec = Math.max(3, Math.ceil((sem.retryAfterMs || 5000) / 1000));
+      return errorResponseEx(
+        `当前正在生成图片的人较多（${sem.currentCount || '已有'}/${sem.max || '上限'}），系统为避免请求被模型方拒绝而暂未为您创建任务。`,
+        {
+          status: 429,
+          error_code: ERROR_CODES.UPSTREAM_BUSY,
+          retry_after_ms: sem.retryAfterMs || 5000,
+          details: { current: sem.currentCount, max: sem.max, retrySec },
+        }
+      );
+    }
+
+    // ========== 扣次数 ==========
     const deductResult = await deductCredits(
       userId,
       cost,
@@ -78,10 +111,21 @@ export async function onRequestPost(context) {
       env.SUPABASE_SERVICE_ROLE_KEY
     );
     if (!deductResult.success) {
-      return errorResponse(deductResult.error || '余额不足，请充值后再生成');
+      try {
+        await releaseUpstreamSeat('image', sem.token, env);
+      } catch (_) {}
+      return errorResponseEx(deductResult.error || '余额不足，请充值后再生成', {
+        status: 400,
+        error_code: deductResult.error_code || ERROR_CODES.BALANCE_INSUFFICIENT,
+        details: {
+          need: deductResult.need,
+          have: deductResult.have,
+        },
+      });
     }
 
     // ========== 调用 Agnes 生成图片 ==========
+    // 图片同步生成：席位从开始占用到结束才释放
     let genResult: any = null;
     try {
       genResult = await generateImage({
@@ -98,12 +142,33 @@ export async function onRequestPost(context) {
         throw new Error(genResult?.error || 'API returned failed');
       }
     } catch (genError: any) {
-      // 失败必须退还次数
-      console.warn('图片生成失败，准备退还次数:', genError?.message);
+      // 失败必须退还次数 + 释放席位
+      try {
+        await releaseUpstreamSeat('image', sem.token, env);
+      } catch (_) {}
       try {
         await rollbackDeducted(userId, cost, deductResult.used_daily, env);
       } catch (_) {}
-      return errorResponse(genError.message || '生成失败，请稍后重试');
+
+      const mappedCode = upstreamToErrorCode(genError?.upstreamType);
+      if (mappedCode) {
+        return errorResponseEx(
+          '图片生成失败：模型方临时返回异常。请稍候重试；如果持续失败，请联系管理员。',
+          {
+            status: 502,
+            error_code: mappedCode,
+            details: {
+              upstream_status: genError?.upstreamStatus || 0,
+              upstream_type: genError?.upstreamType,
+            },
+          }
+        );
+      }
+      return errorResponse(genError.message || '生成失败，请稍后重试', 502);
+    } finally {
+      try {
+        await releaseUpstreamSeat('image', sem.token, env);
+      } catch (_) {}
     }
 
     // 模拟模式（本地测试用），也退次数

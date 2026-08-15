@@ -2,6 +2,44 @@
 // 支持文生图、图生图，同步返回结果
 // 使用官方推荐的新参数格式：size 档位 + ratio 宽高比
 
+// 上游错误类型（与 videoService 保持一致的分类）
+const UPSTREAM_ERROR_TYPES = {
+  AUTH: 'UPSTREAM_AUTH',
+  BALANCE: 'UPSTREAM_BALANCE',
+  RATE_LIMIT: 'UPSTREAM_RATE_LIMIT',
+  OVERLOAD: 'UPSTREAM_OVERLOAD',
+  SERVER_5XX: 'UPSTREAM_5XX',
+  TIMEOUT: 'UPSTREAM_TIMEOUT',
+  NETWORK: 'UPSTREAM_NETWORK',
+  BAD_REQUEST: 'UPSTREAM_BAD_REQUEST',
+  UNKNOWN: 'UPSTREAM_UNKNOWN',
+};
+
+function classifyStatus(status) {
+  if (!status) return UPSTREAM_ERROR_TYPES.NETWORK;
+  if (status === 401) return UPSTREAM_ERROR_TYPES.AUTH;
+  if (status === 402 || status === 403) return UPSTREAM_ERROR_TYPES.BALANCE;
+  if (status === 429) return UPSTREAM_ERROR_TYPES.RATE_LIMIT;
+  if (status === 400 || status === 422) return UPSTREAM_ERROR_TYPES.BAD_REQUEST;
+  if (status === 502 || status === 503 || status === 504) return UPSTREAM_ERROR_TYPES.OVERLOAD;
+  if (status >= 500) return UPSTREAM_ERROR_TYPES.SERVER_5XX;
+  if (status >= 400) return UPSTREAM_ERROR_TYPES.UNKNOWN;
+  return UPSTREAM_ERROR_TYPES.UNKNOWN;
+}
+
+function makeUpstreamError({ type, status, message, raw }) {
+  const err = new Error(message || `Upstream error ${type}`);
+  err.name = 'UpstreamError';
+  err.upstreamType = type;
+  err.upstreamStatus = status || 0;
+  err.upstreamRaw = raw || '';
+  return err;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const MODEL_NAME = 'agnes-image-2.1-flash';
 
 // 尺寸映射：旧格式（widthxheight）→ 新格式（size + ratio）
@@ -95,39 +133,91 @@ export async function generateImage({
     hasImage: !!image,
   });
 
-  try {
-    const response = await fetch(`${apiBase}/images/generations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(120000), // 120 秒超时（官方推荐 60-360 秒）
-    });
+  // 可重试的上游类型
+  const RETRYABLE = new Set([
+    UPSTREAM_ERROR_TYPES.RATE_LIMIT,
+    UPSTREAM_ERROR_TYPES.OVERLOAD,
+    UPSTREAM_ERROR_TYPES.NETWORK,
+    UPSTREAM_ERROR_TYPES.TIMEOUT,
+    UPSTREAM_ERROR_TYPES.SERVER_5XX,
+  ]);
+  const MAX_RETRIES = 2;
+  const backoff = [1500, 4000];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API error ${response.status}: ${errorText}`);
+  let lastErr = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    console.log(`开始调用 Agnes API（图片）第 ${attempt + 1}/${MAX_RETRIES + 1} 次，size:${sizeConfig.size} ratio:${sizeConfig.ratio}`);
+    const startTime = Date.now();
+    try {
+      const response = await fetch(`${apiBase}/images/generations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(120000), // 120 秒超时
+      });
+
+      const elapsed = Date.now() - startTime;
+      console.log('Agnes Image API 返回，耗时:', elapsed, 'ms，状态:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        const type = classifyStatus(response.status);
+        const rawSnippet = (errorText || '').slice(0, 500);
+        lastErr = makeUpstreamError({
+          type,
+          status: response.status,
+          message: `Agnes Image ${response.status}: ${rawSnippet || 'no response body'}`,
+          raw: rawSnippet,
+        });
+      } else {
+        const data = await response.json();
+
+        if (data.data && data.data[0] && data.data[0].url) {
+          return {
+            success: true,
+            imageUrl: data.data[0].url,
+            revisedPrompt: data.data[0].revised_prompt || null,
+            mode: 'agnes',
+          };
+        } else {
+          throw new Error('返回数据格式不正确');
+        }
+      }
+    } catch (rawErr) {
+      const elapsed = Date.now() - startTime;
+      let type = UPSTREAM_ERROR_TYPES.NETWORK;
+      if (rawErr?.name === 'TimeoutError' || String(rawErr?.message || '').toLowerCase().includes('timeout')) {
+        type = UPSTREAM_ERROR_TYPES.TIMEOUT;
+      } else if (rawErr?.upstreamType) {
+        type = rawErr.upstreamType;
+      }
+      lastErr = makeUpstreamError({
+        type,
+        status: rawErr?.upstreamStatus || 0,
+        message: `Agnes Image ${type}: ${rawErr?.message || rawErr}`,
+        raw: String(rawErr?.message || rawErr || '').slice(0, 500),
+      });
+      console.error(`Agnes Image 调用异常（${elapsed}ms, 尝试 ${attempt + 1}/${MAX_RETRIES + 1}）：${lastErr.message}`);
     }
 
-    const data = await response.json();
-
-    if (data.data && data.data[0] && data.data[0].url) {
-      return {
-        success: true,
-        imageUrl: data.data[0].url,
-        revisedPrompt: data.data[0].revised_prompt || null,
-        mode: 'agnes',
-      };
-    } else {
-      throw new Error('返回数据格式不正确');
+    // 可重试就再试一次
+    if (RETRYABLE.has(lastErr?.upstreamType) && attempt < MAX_RETRIES) {
+      const waitMs = backoff[attempt] || 2000;
+      console.log(`Agnes Image ${lastErr.upstreamType}，${waitMs}ms 后重试...`);
+      await sleep(waitMs + Math.floor(Math.random() * 1000));
+      continue;
     }
-  } catch (error) {
-    console.error('Agnes Image API 错误:', error);
-    // 直接抛出错误，不降级到模拟模式（方便排查问题）
-    throw error;
+    break;
   }
+
+  // 全部失败：抛出最后一个结构化错误
+  throw lastErr || makeUpstreamError({
+    type: UPSTREAM_ERROR_TYPES.UNKNOWN,
+    message: 'Agnes Image 调用失败',
+  });
 }
 
 // 模拟生成图片（测试用）

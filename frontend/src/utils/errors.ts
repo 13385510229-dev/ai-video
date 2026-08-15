@@ -12,7 +12,12 @@ export type ErrorCategory =
   | 'CREDIT_CONCURRENT'    // 并发冲突，稍后重试
   | 'AUTH_UNAUTHORIZED'    // 未登录或登录失效（引导去登录）
   | 'AUTH_FORBIDDEN'       // 无权限（如管理员密码错误）
-  | 'RATE_LIMIT'           // 限流（告诉用户要等多久）
+  | 'RATE_LIMIT'           // 我们的服务限流（告诉用户要等多久）
+  | 'UPSTREAM_BUSY'        // 上游模型并发已满（主动拦的，让用户晚几秒再试）
+  | 'UPSTREAM_LIMIT'       // 上游模型 429 限流（被对方拦了）
+  | 'UPSTREAM_ADMIN'       // 上游 API Key 失效 / 余额不足（只有管理员能修）
+  | 'UPSTREAM_TEMP'        // 上游临时故障 502/503/超时/网络抖动，一般重试就好
+  | 'UPSTREAM_BAD_INPUT'   // 上游 400：提示词里有违规词 / 参数不对
   | 'INPUT_VALIDATION'     // 参数不合法（具体告诉哪里错）
   | 'NETWORK'              // 断网/CORS/跨域/超时
   | 'SERVER_ERROR'         // 5xx 服务器错误
@@ -34,15 +39,26 @@ export interface FriendlyError {
   };
 }
 
-// 后端业务错误码（与 functions/api/_lib/auth.js 的 RATE_LIMITED 等保持一致）
+// 后端业务错误码（与 functions/api/_lib/membership.js 的 ERROR_CODES 一一对应）
 const BIZ_CODE: Record<string, ErrorCategory> = {
-  // membership.js
+  // membership.js - 余额/每日类
   USER_NOT_FOUND: 'AUTH_UNAUTHORIZED',
   BALANCE_INSUFFICIENT: 'CREDIT_BALANCE',
   DAILY_INSUFFICIENT: 'CREDIT_DAILY',
   TOTAL_INSUFFICIENT: 'CREDIT_TOTAL',
   CONCURRENT_CONFLICT: 'CREDIT_CONCURRENT',
   INVALID_COST: 'INPUT_VALIDATION',
+  // 上游 Agnes 模型侧 - 我们主动拦（upstreamSemaphore）
+  UPSTREAM_BUSY: 'UPSTREAM_BUSY',
+  // 上游 Agnes 模型侧 - 返回的 HTTP 状态分类
+  UPSTREAM_AUTH: 'UPSTREAM_ADMIN',      // 401 API Key 失效
+  UPSTREAM_BALANCE: 'UPSTREAM_ADMIN',   // 402/403 上游额度用完
+  UPSTREAM_RATE_LIMIT: 'UPSTREAM_LIMIT',// 429 被上游限流
+  UPSTREAM_OVERLOAD: 'UPSTREAM_TEMP',   // 502/503/504
+  UPSTREAM_TIMEOUT: 'UPSTREAM_TEMP',
+  UPSTREAM_NETWORK: 'UPSTREAM_TEMP',
+  UPSTREAM_5XX: 'UPSTREAM_TEMP',
+  UPSTREAM_BAD_REQUEST: 'UPSTREAM_BAD_INPUT',
   // auth.js 里的通用错误码
   RATE_LIMITED: 'RATE_LIMIT',
   UNAUTHORIZED: 'AUTH_UNAUTHORIZED',
@@ -130,6 +146,8 @@ export function formatError(err: any, fallbackTitle = '操作失败'): FriendlyE
     const cat = BIZ_CODE[bizErrorCode];
     const need: number = Number(respData?.need);
     const have: number = Number(respData?.have);
+    const retryMs: number | undefined = Number(respData?.retry_after_ms) || undefined;
+    const retrySec: number = retryMs ? Math.max(3, Math.ceil(retryMs / 1000)) : 10;
 
     switch (cat) {
       case 'CREDIT_BALANCE': {
@@ -171,6 +189,43 @@ export function formatError(err: any, fallbackTitle = '操作失败'): FriendlyE
           category: cat,
           title: '操作太频繁啦',
           detail: rawMsg || '请等一会儿再点击，避免账号被限制。',
+        };
+      case 'UPSTREAM_BUSY':
+        return {
+          category: cat,
+          title: '当前生成排队中，请稍后再试',
+          detail: rawMsg
+            ? `${rawMsg}\n建议你等待 ${retrySec} 秒后再点，或者稍后回来重试，不会扣任何次数。`
+            : `同一时间生成的人太多了，系统为了保证生成质量暂时排满了。\n建议等待 ${retrySec} 秒后再点一次，不会扣你的任何次数。`,
+        };
+      case 'UPSTREAM_LIMIT':
+        return {
+          category: cat,
+          title: '模型方暂时限住了请求',
+          detail:
+            '刚刚模型提供商（Agnes）返回「请求过快」，这说明最近一段时间访问他们的人很多。\n请等待 15~30 秒后再点一次重试，次数已经退回到你的账户。',
+        };
+      case 'UPSTREAM_ADMIN':
+        return {
+          category: cat,
+          title: '系统临时不可用，请联系管理员',
+          detail:
+            '这个错误只有网站管理员能修复，一般是以下两种情况：\n1. 接入的模型 API Key 过期或被停用\n2. 管理员账号在模型方的余额/额度用完了\n\n请把这条错误截图发给网站管理员处理，你自己的账户次数已经退还。',
+        };
+      case 'UPSTREAM_TEMP':
+        return {
+          category: cat,
+          title: '模型服务器正忙，稍后重试即可',
+          detail:
+            '模型方服务器出现短暂抖动（如 503 网关超时 / 网络波动）。\n请等待 10 秒后点「重试」，如果连续 3 次都不行，就稍后再回来生成。',
+        };
+      case 'UPSTREAM_BAD_INPUT':
+        return {
+          category: cat,
+          title: '你的描述词无法被模型接受',
+          detail: rawMsg
+            ? `${rawMsg}\n请检查并修改：可能包含敏感/违规词、特殊符号太多、或描述过短过长。修改后再试即可。`
+            : '请检查描述词：\n1. 是否有违规、敏感、涉政词\n2. 是否包含奇怪的特殊字符\n3. 是否写得太短（少于 5 个字）\n修改后再点击生成即可。',
         };
       default:
         break;
