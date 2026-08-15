@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { formatError } from '../utils/errors';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -144,7 +145,38 @@ const ChatPanel = ({ initialPrompt = '', contextHint = '' }: ChatPanelProps) => 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    const userMessage: Message = { role: 'user', content: input.trim() };
+    const trimmed = input.trim();
+
+    // 基本输入检查
+    if (trimmed.length > 5000) {
+      const emptyId = 'notice-' + Date.now();
+      setConversations((prev) => {
+        const target = prev.find((c) => c.id === activeId);
+        const newMsg: Message = {
+          role: 'assistant',
+          content: `⚠️ 输入太长啦\n你写了 ${trimmed.length} 字，单次最多发送 5000 字。请把内容分几次发送，或者精简一下再提问。`,
+        };
+        if (!target) {
+          const newConv: Conversation = {
+            id: emptyId,
+            title: '新对话',
+            messages: [
+              { role: 'assistant', content: contextHint || '你好！我是 AI 助手，有什么可以帮你的吗？' },
+              newMsg,
+            ],
+            createdAt: Date.now(),
+          };
+          setActiveId(newConv.id);
+          return [newConv, ...prev];
+        }
+        return prev.map((c) =>
+          c.id === activeId ? { ...c, messages: [...c.messages, newMsg] } : c
+        );
+      });
+      return;
+    }
+
+    const userMessage: Message = { role: 'user', content: trimmed };
     let currentConvId = activeId;
     let updatedMessages: Message[];
 
@@ -245,14 +277,18 @@ const ChatPanel = ({ initialPrompt = '', contextHint = '' }: ChatPanelProps) => 
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
-        const errorMsg = err.message || '发送失败，请重试';
-        setConversations(prev =>
-          prev.map(c => {
+        const fe = formatError(err, '回复失败');
+        setConversations((prev) =>
+          prev.map((c) => {
             if (c.id !== currentConvId) return c;
             const updated = [...c.messages];
             updated[aiMessageIndex] = {
               role: 'assistant',
-              content: `抱歉，出错了：${errorMsg}`,
+              content: `🤖 ${fe.title}\n\n${fe.detail}\n\n建议操作：` +
+                (fe.suggestedAction
+                  ? `点击右上角${fe.suggestedAction.label}按钮；`
+                  : '') +
+                `如果一直出现请稍后重试或刷新页面。`,
             };
             return { ...c, messages: updated };
           })
@@ -372,18 +408,31 @@ const ChatPanel = ({ initialPrompt = '', contextHint = '' }: ChatPanelProps) => 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入消息..."
+            placeholder="输入消息...（Enter 发送，Shift+Enter 换行）"
             className="flex-1 resize-none border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400 transition-colors bg-gray-50"
             rows={2}
             disabled={loading}
+            maxLength={5000}
           />
           <button
             onClick={handleSend}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || input.length > 5000}
             className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-end"
+            title={
+              loading
+                ? 'AI 正在思考，请稍候...'
+                : !input.trim()
+                  ? '请先输入你想问的内容'
+                  : input.length > 5000
+                    ? '单次消息超过 5000 字了，请精简后再发送'
+                    : '发送消息给 AI 助手（Ctrl+Enter）'
+            }
           >
             {loading ? '...' : '发送'}
           </button>
+        </div>
+        <div className="mt-1 text-[11px] text-gray-400 text-right">
+          {input.length}/5000
         </div>
       </div>
     </div>

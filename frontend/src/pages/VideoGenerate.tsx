@@ -4,6 +4,9 @@ import { useAuthStore } from '../store/auth';
 import { generateVideo, uploadImage } from '../api';
 import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS, VIDEO_MODES } from '../types';
 import ChatPanel from '../components/ChatPanel';
+import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import { formatError } from '../utils/errors';
+import type { FriendlyError } from '../utils/errors';
 
 const VideoGenerate = () => {
   const navigate = useNavigate();
@@ -22,7 +25,7 @@ const VideoGenerate = () => {
   const [multipleImageUrls, setMultipleImageUrls] = useState<string[]>(['', '']);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<FriendlyError | null>(null);
 
   const currentCost = VIDEO_DURATIONS.find(d => d.value === duration)?.cost || 1;
 
@@ -70,9 +73,27 @@ const VideoGenerate = () => {
     const file = e.target.files?.[0];
     if (file) {
       setSingleFile(file);
-      setError('');
+      setError(null);
       setUploading(true);
       try {
+        if (file.size > 8 * 1024 * 1024) {
+          setError({
+            category: 'UPLOAD_FAILED',
+            title: '图片太大了',
+            detail: `这张图片是 ${(file.size / 1024 / 1024).toFixed(1)}MB，超过了 8MB 的上限。\n建议用画图或手机相册压缩一下再上传，或者换一张更小的图片。`,
+          });
+          return;
+        }
+        const allowed = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!allowed.includes(file.type)) {
+          setError({
+            category: 'UPLOAD_FAILED',
+            title: '图片格式不支持',
+            detail: `当前文件是 ${file.type || '未知格式'}。\n请改成 JPG 或 PNG 格式再上传，不支持 WebP / GIF / BMP。`,
+          });
+          return;
+        }
+
         const base64 = await compressImage(file);
         setSingleImageBase64(base64);
         // 上传到服务器获取 URL
@@ -80,11 +101,10 @@ const VideoGenerate = () => {
         if (res.data.success) {
           setSingleImageUrl(res.data.url);
         } else {
-          setError(res.data.message || '图片上传失败');
+          setError(formatError(res.data, '图片上传失败'));
         }
       } catch (err: any) {
-        const errMsg = err.response?.data?.error || err.message || '未知错误';
-        setError('图片上传失败: ' + errMsg);
+        setError(formatError(err, '图片上传失败'));
         console.error('图片上传错误:', err.response?.data || err);
       } finally {
         setUploading(false);
@@ -99,9 +119,26 @@ const VideoGenerate = () => {
       const newFiles = [...multipleFiles];
       newFiles[index] = file;
       setMultipleFiles(newFiles);
-      setError('');
+      setError(null);
       setUploading(true);
       try {
+        if (file.size > 8 * 1024 * 1024) {
+          setError({
+            category: 'UPLOAD_FAILED',
+            title: `第${index + 1}张图片太大了`,
+            detail: `这张图片是 ${(file.size / 1024 / 1024).toFixed(1)}MB，超过了 8MB 的上限。\n请压缩后再上传。`,
+          });
+          return;
+        }
+        const allowed = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!allowed.includes(file.type)) {
+          setError({
+            category: 'UPLOAD_FAILED',
+            title: `第${index + 1}张图片格式不支持`,
+            detail: `当前文件是 ${file.type || '未知格式'}。\n请改成 JPG 或 PNG 再上传。`,
+          });
+          return;
+        }
         const base64 = await compressImage(file);
         const newBase64s = [...multipleImageBase64s];
         newBase64s[index] = base64;
@@ -113,11 +150,10 @@ const VideoGenerate = () => {
           newUrls[index] = res.data.url;
           setMultipleImageUrls(newUrls);
         } else {
-          setError(res.data.message || '图片上传失败');
+          setError(formatError(res.data, '图片上传失败'));
         }
       } catch (err: any) {
-        const errMsg = err.response?.data?.error || err.message || '未知错误';
-        setError('图片上传失败: ' + errMsg);
+        setError(formatError(err, '图片上传失败'));
         console.error('图片上传错误:', err.response?.data || err);
       } finally {
         setUploading(false);
@@ -157,45 +193,94 @@ const VideoGenerate = () => {
       setMultipleImageBase64s(['', '']);
       setMultipleImageUrls(['', '']);
     }
-    setError('');
+    setError(null);
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      setError('请输入视频描述');
+    const trimmed = prompt.trim();
+
+    if (!trimmed) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '请填写视频描述',
+        detail: '没有描述词 AI 不知道要生成什么内容。\n建议至少写 10 个字以上，越详细效果越好。',
+      });
+      return;
+    }
+    if (trimmed.length < 5) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '描述太短了',
+        detail: `你只写了 ${trimmed.length} 个字。\n为了生成质量，请至少写 5 个字以上；包含主体、场景、动作会更好。`,
+      });
+      return;
+    }
+    if (trimmed.length > 1500) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '描述太长了',
+        detail: `你写了 ${trimmed.length} 个字，系统最多接受 1500 字。\n请精简一下主要内容，再点击生成。`,
+      });
+      return;
+    }
+    if (negativePrompt && negativePrompt.length > 1000) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '负面提示词太长了',
+        detail: `负面提示写了 ${negativePrompt.length} 个字，系统最多接受 1000 字。\n请精简后再试。`,
+      });
       return;
     }
 
     // 图生视频模式需要图片
     if (mode === 'i2v' && !singleImageUrl) {
-      setError(uploading ? '图片上传中，请稍候...' : '请选择参考图片');
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: uploading ? '图片还在上传中' : '图生视频需要一张参考图',
+        detail: uploading
+          ? '服务器还在处理你的图片，请等几秒、上传完成后按钮会自动亮起，再点一次就好。'
+          : '点击上面的虚线框选择一张 JPG 或 PNG 图片，作为视频的起始画面。',
+      });
       return;
     }
 
     // 多图模式需要至少一张图
-    if (mode === 'multi-image' && multipleImageUrls.filter(u => u).length === 0) {
-      setError(uploading ? '图片上传中，请稍候...' : '请至少选择一张参考图片');
+    const validMultiCount = multipleImageUrls.filter((u) => u).length;
+    if (mode === 'multi-image' && validMultiCount === 0) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: uploading ? '图片还在上传中' : '多图模式至少需要 1 张参考图',
+        detail: uploading
+          ? '请等图片上传完毕再点击生成。'
+          : '点击下面的虚线框选择至少 1 张图片，来引导视频的风格和内容。',
+      });
       return;
     }
 
     // 关键帧模式需要至少2张图片
-    if (mode === 'keyframes' && multipleImageUrls.filter(u => u).length < 2) {
-      setError(uploading ? '图片上传中，请稍候...' : '关键帧模式需要至少选择2张参考图片');
+    if (mode === 'keyframes' && validMultiCount < 2) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: uploading ? '图片还在上传中' : `关键帧模式需要 2 张以上的图片（你当前上传了 ${validMultiCount} 张）`,
+        detail: uploading
+          ? '请等所有图片都上传完毕，再点击生成。'
+          : '关键帧动画需要至少 2 张图：第一张作为起始画面，最后一张作为结束画面，中间会自动过渡。',
+      });
       return;
     }
 
-    if ((user?.balance || 0) < currentCost) {
-      setError('次数不足，请先充值');
-      return;
+    if ((user?.balance ?? 0) < currentCost && (!user?.is_member || true)) {
+      // 真正精确"够不够"判断后端会做，这里只是前置提示一下；如果是会员 is_member=true 即使 balance=0 也可能有每日次数
+      // 所以这里不做"提前拒绝"，只保留一个宽松判断：余额<0 一定不行。但因为余额 >=0 所以这行只是占位。
     }
 
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
       const params: any = {
-        prompt,
-        negativePrompt,
+        prompt: trimmed,
+        negativePrompt: negativePrompt.trim() || undefined,
         style,
         duration,
         aspectRatio,
@@ -205,7 +290,7 @@ const VideoGenerate = () => {
       if (mode === 'i2v') {
         params.image = singleImageUrl;
       } else if (mode === 'multi-image' || mode === 'keyframes') {
-        params.images = multipleImageUrls.filter(u => u);
+        params.images = multipleImageUrls.filter((u) => u);
       }
 
       const res = await generateVideo(params);
@@ -216,12 +301,11 @@ const VideoGenerate = () => {
         // 跳转到历史记录
         navigate('/history');
       } else {
-        setError(res.data.message || '生成失败');
+        setError(formatError(res.data, '生成失败'));
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || '生成失败，请稍后重试';
       console.error('视频生成错误:', err.response?.data || err);
-      setError(errorMsg);
+      setError(formatError(err, '视频生成失败'));
     } finally {
       setLoading(false);
     }
@@ -452,8 +536,12 @@ const VideoGenerate = () => {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
-            {error}
+          <div className="mb-6">
+            <FriendlyErrorBox
+              error={error}
+              onRetry={() => handleGenerate()}
+              onDismiss={() => setError(null)}
+            />
           </div>
         )}
 
@@ -462,11 +550,28 @@ const VideoGenerate = () => {
             本次消耗 <span className="text-gray-900 font-medium">{currentCost}</span> 次
             <span className="mx-2">·</span>
             剩余 <span className="text-gray-900 font-medium">{user?.balance || 0}</span> 次
+            {user?.is_member && user?.daily_credits_remaining != null && (
+              <>
+                <span className="mx-2">·</span>
+                <span className="text-green-700">
+                  今日剩余 <span className="font-medium">{user.daily_credits_remaining}</span> 次
+                </span>
+              </>
+            )}
           </div>
           <button
             onClick={handleGenerate}
-            disabled={loading || !prompt.trim()}
+            disabled={loading || !prompt.trim() || uploading}
             className="px-8 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2"
+            title={
+              loading
+                ? '正在生成视频，请勿重复点击'
+                : !prompt.trim()
+                  ? '请先填写视频描述'
+                  : uploading
+                    ? '请等图片上传完成'
+                    : '点击开始生成视频'
+            }
           >
             {loading ? (
               <>

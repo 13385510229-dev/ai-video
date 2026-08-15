@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminLogin } from '../api';
+import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import { formatError } from '../utils/errors';
+import type { FriendlyError } from '../utils/errors';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<FriendlyError | null>(null);
 
   useEffect(() => {
     // 管理员凭据仅用 sessionStorage 存（关闭浏览器自动清除，降低被 XSS 长期窃取明文密码风险）
@@ -17,27 +20,41 @@ const AdminLogin = () => {
   }, [navigate]);
 
   const handleLogin = async () => {
-    if (!password.trim()) {
-      setError('请输入管理员密码');
+    const pwd = password.trim();
+    if (!pwd) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '请输入管理员密码',
+        detail: '登录管理后台需要管理员密码。\n如果你是网站所有者，密码通过部署时的 ADMIN_PASSWORD 环境变量配置。',
+      });
+      return;
+    }
+    if (pwd.length > 256) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '密码太长了',
+        detail: `当前输入了 ${pwd.length} 个字符。\n管理员密码不会这么长，请检查是否误粘贴了其他内容。`,
+      });
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
-      const res = await adminLogin(password);
+      const res = await adminLogin(pwd);
       if (res.data.success) {
         // 管理员密码仅存 sessionStorage（非持久化 localStorage）
-        sessionStorage.setItem('adminKey', password);
+        sessionStorage.setItem('adminKey', pwd);
         // 兼容旧命名的清理
         localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminKey');
         navigate('/admin');
       } else {
-        setError(res.data.message || '登录失败');
+        setError(formatError(res.data, '登录失败'));
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || '登录失败，请稍后重试');
+      setError(formatError(err, '登录失败'));
     } finally {
       setLoading(false);
     }
@@ -67,8 +84,12 @@ const AdminLogin = () => {
           </div>
 
           {error && (
-            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
-              {error}
+            <div className="mb-6">
+              <FriendlyErrorBox
+                error={error}
+                onRetry={() => handleLogin()}
+                onDismiss={() => setError(null)}
+              />
             </div>
           )}
 
@@ -76,6 +97,13 @@ const AdminLogin = () => {
             onClick={handleLogin}
             disabled={loading || !password.trim()}
             className="btn btn-primary w-full"
+            title={
+              loading
+                ? '正在验证密码...'
+                : !password.trim()
+                  ? '请先输入管理员密码'
+                  : '点击登录管理后台'
+            }
           >
             {loading ? '登录中...' : '登录'}
           </button>

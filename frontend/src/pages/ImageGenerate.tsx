@@ -4,6 +4,9 @@ import { useAuthStore } from '../store/auth';
 import { generateImage, uploadImage } from '../api';
 import { IMAGE_SIZES, IMAGE_STYLES, IMAGE_MODES } from '../types';
 import ChatPanel from '../components/ChatPanel';
+import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import { formatError } from '../utils/errors';
+import type { FriendlyError } from '../utils/errors';
 
 export default function ImageGenerate() {
   const navigate = useNavigate();
@@ -20,7 +23,7 @@ export default function ImageGenerate() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<FriendlyError | null>(null);
   const [progress, setProgress] = useState(0);
 
   const cost = 1; // 每张图片消耗 1 次
@@ -69,9 +72,27 @@ export default function ImageGenerate() {
     const file = e.target.files?.[0];
     if (file) {
       setReferenceFile(file);
-      setError('');
+      setError(null);
       setUploading(true);
       try {
+        if (file.size > 8 * 1024 * 1024) {
+          setError({
+            category: 'UPLOAD_FAILED',
+            title: '参考图太大了',
+            detail: `这张图片是 ${(file.size / 1024 / 1024).toFixed(1)}MB，超过了 8MB 的上限。\n请压缩后再上传，或者换一张更小的图片。`,
+          });
+          return;
+        }
+        const allowed = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!allowed.includes(file.type)) {
+          setError({
+            category: 'UPLOAD_FAILED',
+            title: '参考图格式不支持',
+            detail: `当前文件是 ${file.type || '未知格式'}。\n请改成 JPG 或 PNG 再上传，不支持 WebP/GIF。`,
+          });
+          return;
+        }
+
         const base64 = await compressImage(file);
         setReferenceImageBase64(base64);
         // 上传到服务器获取 URL
@@ -79,11 +100,10 @@ export default function ImageGenerate() {
         if (res.data.success) {
           setReferenceImageUrl(res.data.url);
         } else {
-          setError(res.data.message || '图片上传失败');
+          setError(formatError(res.data, '图片上传失败'));
         }
       } catch (err: any) {
-        const errMsg = err.response?.data?.error || err.message || '未知错误';
-        setError('图片上传失败: ' + errMsg);
+        setError(formatError(err, '图片上传失败'));
         console.error('图片上传错误:', err.response?.data || err);
       } finally {
         setUploading(false);
@@ -92,24 +112,56 @@ export default function ImageGenerate() {
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      setError('请输入图片描述');
+    const trimmed = prompt.trim();
+    const trimmedNeg = negativePrompt.trim();
+
+    if (!trimmed) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '请填写图片描述',
+        detail: '没有描述词 AI 不知道要生成什么。\n建议写清楚主体、场景、风格，画面会更贴近你的预期。',
+      });
+      return;
+    }
+    if (trimmed.length < 3) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '描述太短了',
+        detail: `你只写了 ${trimmed.length} 个字。\n请至少写 3 个字以上，例如：一只橘猫在夕阳下的海边散步。`,
+      });
+      return;
+    }
+    if (trimmed.length > 2000) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '描述太长了',
+        detail: `你写了 ${trimmed.length} 个字，最多接受 2000 字。\n请精简主要元素，再点击生成。`,
+      });
+      return;
+    }
+    if (trimmedNeg && trimmedNeg.length > 1000) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '负面提示词太长了',
+        detail: `负面提示写了 ${trimmedNeg.length} 个字，最多接受 1000 字。\n请精简后再试。`,
+      });
       return;
     }
 
     // 图生图模式需要参考图
     if (mode === 'image2image' && !referenceImageUrl) {
-      setError(uploading ? '图片上传中，请稍候...' : '请选择参考图片');
-      return;
-    }
-
-    if (!user || user.balance < cost) {
-      setError('次数不足，请先充值');
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: uploading ? '图片还在上传中' : '图生图需要一张参考图',
+        detail: uploading
+          ? '服务器还在处理你的图片，等几秒上传完成后再点击生成。'
+          : '点击上面的虚线框选择一张 JPG/PNG 图片，AI 会基于它修改画面风格/内容。',
+      });
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError(null);
     setGeneratedImage(null);
     setProgress(0);
 
@@ -127,8 +179,8 @@ export default function ImageGenerate() {
 
     try {
       const params: any = {
-        prompt: prompt.trim(),
-        negativePrompt: negativePrompt.trim() || undefined,
+        prompt: trimmed,
+        negativePrompt: trimmedNeg || undefined,
         style,
         size,
         mode,
@@ -148,10 +200,10 @@ export default function ImageGenerate() {
           deductCredits(cost);
         }, 500);
       } else {
-        setError(res.data.message || '生成失败');
+        setError(formatError(res.data, '生成失败'));
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || '生成失败，请稍后重试');
+      setError(formatError(err, '图片生成失败'));
     } finally {
       clearInterval(interval);
       setTimeout(() => {
@@ -321,13 +373,32 @@ export default function ImageGenerate() {
             消耗：<span className="text-gray-900 font-medium">{cost} 次</span>
             <span className="mx-2">·</span>
             余额：<span className="text-gray-900 font-medium">{user?.balance || 0} 次</span>
+            {user?.is_member && user?.daily_credits_remaining != null && (
+              <>
+                <span className="mx-2">·</span>
+                <span className="text-green-700">
+                  今日剩余 <span className="font-medium">{user.daily_credits_remaining}</span> 次
+                </span>
+              </>
+            )}
           </div>
 
           <div className="relative">
             <button
               onClick={handleGenerate}
-              disabled={loading || !prompt.trim() || (mode === 'image2image' && !referenceImageUrl)}
+              disabled={loading || !prompt.trim() || uploading || (mode === 'image2image' && !referenceImageUrl)}
               className="px-8 py-3 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 relative overflow-hidden min-w-[140px]"
+              title={
+                loading
+                  ? '正在生成图片，请勿重复点击'
+                  : !prompt.trim()
+                    ? '请先填写图片描述'
+                    : uploading
+                      ? '请等图片上传完成'
+                      : mode === 'image2image' && !referenceImageUrl
+                        ? '图生图模式请先上传参考图'
+                        : '点击开始生成图片'
+              }
             >
               {loading ? (
                 <span className="relative z-10 flex items-center justify-center gap-2">
@@ -337,7 +408,7 @@ export default function ImageGenerate() {
                 '生成图片'
               )}
               {loading && (
-                <div 
+                <div
                   className="absolute inset-0 bg-gray-700 transition-all duration-500"
                   style={{ width: `${progress}%` }}
                 />
@@ -348,8 +419,12 @@ export default function ImageGenerate() {
 
         {/* 错误提示 */}
         {error && (
-          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
-            {error}
+          <div className="mt-6">
+            <FriendlyErrorBox
+              error={error}
+              onRetry={() => handleGenerate()}
+              onDismiss={() => setError(null)}
+            />
           </div>
         )}
 

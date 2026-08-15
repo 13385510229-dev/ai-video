@@ -3,13 +3,16 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import WaveBackground from '../components/WaveBackground';
 import SliderCaptcha from '../components/SliderCaptcha';
+import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import { formatError } from '../utils/errors';
+import type { FriendlyError } from '../utils/errors';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<FriendlyError | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [captchaVerified, setCaptchaVerified] = useState(false);
 
@@ -31,15 +34,41 @@ const Login = () => {
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null);
 
-    if (!email) {
-      setError('请输入邮箱地址');
+    const emailVal = email.trim();
+    if (!emailVal) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '请输入邮箱地址',
+        detail: '我们需要邮箱来给你发送一次性登录验证码。\n请填写一个你能正常收信的邮箱。',
+      });
+      return;
+    }
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(emailVal)) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '邮箱格式不对',
+        detail: `当前填写的是「${emailVal}」。\n请检查有没有漏掉 @ 和域名，比如 abc@example.com 这样的格式。`,
+      });
+      return;
+    }
+    if (emailVal.length > 254) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '邮箱太长了',
+        detail: `你输入的邮箱有 ${emailVal.length} 个字符，超过了 254 的上限。\n请换成更短的邮箱再试。`,
+      });
       return;
     }
 
     if (!captchaVerified) {
-      setError('请先完成滑块验证');
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '请先完成滑块验证',
+        detail: '拖动下面的拼图滑块，把缺口对到正确的位置。\n通过验证后才能发送登录验证码，这是为了防止机器人刷接口。',
+      });
       return;
     }
 
@@ -48,20 +77,25 @@ const Login = () => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: emailVal }),
       });
       const data = await response.json();
 
       if (data.success) {
         setStep(2);
         setCountdown(60);
+        setError({
+          category: 'UNKNOWN',
+          title: '验证码已发送',
+          detail: `验证码邮件已发送到 ${emailVal}。\n请查收收件箱（如果没看到，去「垃圾邮件」文件夹找一下），然后把 6 位数字填到下面的输入框。`,
+        });
       } else {
-        setError(data.error || '发送失败，请重试');
+        setError(formatError(data, '发送验证码失败'));
         // 发送失败后重置滑块验证
         setCaptchaVerified(false);
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(formatError(err, '发送验证码失败'));
       setCaptchaVerified(false);
     } finally {
       setLoading(false);
@@ -70,10 +104,23 @@ const Login = () => {
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null);
 
-    if (!code) {
-      setError('请输入验证码');
+    const codeVal = code.trim();
+    if (!codeVal) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '请输入验证码',
+        detail: '验证码是我们刚刚发送到你邮箱的 6 位数字。\n请查收邮件后把数字填进来。',
+      });
+      return;
+    }
+    if (!/^\d{4,8}$/.test(codeVal)) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '验证码格式不对',
+        detail: `当前输入的是「${codeVal}」。\n验证码应该是 4~8 位纯数字，请检查有没有多打空格或字母。`,
+      });
       return;
     }
 
@@ -82,7 +129,7 @@ const Login = () => {
       const response = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code }),
+        body: JSON.stringify({ email: email.trim(), code: codeVal }),
       });
       const data = await response.json();
 
@@ -91,10 +138,10 @@ const Login = () => {
         setUser(data.user);
         navigate('/video');
       } else {
-        setError(data.error || '验证失败，请重试');
+        setError(formatError(data, '验证失败'));
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(formatError(err, '验证失败'));
     } finally {
       setLoading(false);
     }
@@ -164,9 +211,10 @@ const Login = () => {
                 </div>
 
                 {error && (
-                  <div className="text-red-500 text-sm text-center animate-shake">
-                    {error}
-                  </div>
+                  <FriendlyErrorBox
+                    error={error}
+                    onDismiss={() => setError(null)}
+                  />
                 )}
 
                 <button
@@ -186,9 +234,9 @@ const Login = () => {
                   <input
                     type="text"
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
+                    onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, '').slice(0, 8))}
                     placeholder="请输入6位验证码"
-                    maxLength={6}
+                    maxLength={8}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-300 focus:bg-white transition-all text-center text-2xl tracking-widest font-mono"
                   />
                 </div>
@@ -196,12 +244,16 @@ const Login = () => {
                 <div className="text-center text-sm text-gray-400">
                   验证码已发送至{' '}
                   <span className="text-gray-600 font-medium">{email}</span>
+                  <div className="mt-1 text-xs text-gray-400">
+                    如果 1 分钟内没收到邮件：请检查「垃圾邮件」或「广告邮件」文件夹
+                  </div>
                 </div>
 
                 {error && (
-                  <div className="text-red-500 text-sm text-center animate-shake">
-                    {error}
-                  </div>
+                  <FriendlyErrorBox
+                    error={error}
+                    onDismiss={() => setError(null)}
+                  />
                 )}
 
                 <button

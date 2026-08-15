@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { getVideoList, deleteVideo } from '../api';
 import type { Video } from '../types';
+import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import { formatError } from '../utils/errors';
+import type { FriendlyError } from '../utils/errors';
 
 const History = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<FriendlyError | null>(null);
+  const [loadError, setLoadError] = useState<FriendlyError | null>(null);
   const [now, setNow] = useState(Date.now());
 
   // 每秒更新时间，让进度条动起来
@@ -22,9 +26,13 @@ const History = () => {
       const res = await getVideoList();
       if (res.data.success) {
         setVideos(res.data.videos || []);
+        setLoadError(null);
+      } else {
+        setLoadError(formatError(res.data, '加载历史记录失败'));
       }
     } catch (err) {
       console.error('Failed to fetch videos:', err);
+      setLoadError(formatError(err, '加载历史记录失败'));
     } finally {
       setLoading(false);
     }
@@ -50,16 +58,16 @@ const History = () => {
     }
 
     setDeletingId(id);
-    setError('');
+    setError(null);
     try {
       const res = await deleteVideo(id);
       if (res.data.success) {
         setVideos(videos.filter(v => v.id !== id));
       } else {
-        setError(res.data.message || res.data.error || '删除失败');
+        setError(formatError(res.data, '删除失败'));
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || err.message || '删除失败，请稍后重试');
+      setError(formatError(err, '删除失败'));
     } finally {
       setDeletingId(null);
     }
@@ -155,21 +163,54 @@ const History = () => {
         <p className="text-gray-500 text-lg">共 {videos.length} 个视频</p>
       </div>
 
+      {loadError && (
+        <div className="mb-8">
+          <FriendlyErrorBox
+            error={loadError}
+            onRetry={() => {
+              setLoading(true);
+              fetchVideos();
+            }}
+            onDismiss={() => setLoadError(null)}
+          />
+        </div>
+      )}
+
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm animate-shake">
-          {error}
+        <div className="mb-6">
+          <FriendlyErrorBox
+            error={error}
+            onDismiss={() => setError(null)}
+          />
         </div>
       )}
 
       {videos.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-2xl text-center py-20 shadow-sm">
-          <p className="text-gray-500 mb-6 text-lg">还没有生成过视频</p>
-          <button
-            onClick={() => window.location.href = '/video'}
-            className="px-8 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5"
-          >
-            去生成第一个视频
-          </button>
+          {loadError ? (
+            <>
+              <p className="text-gray-500 mb-6 text-lg">暂时加载不出记录</p>
+              <button
+                onClick={() => {
+                  setLoading(true);
+                  fetchVideos();
+                }}
+                className="px-8 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5"
+              >
+                重新加载历史记录
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-gray-500 mb-6 text-lg">还没有生成过视频</p>
+              <button
+                onClick={() => window.location.href = '/video'}
+                className="px-8 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5"
+              >
+                去生成第一个视频
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

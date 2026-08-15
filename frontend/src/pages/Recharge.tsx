@@ -3,6 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { createOrder, verifyOrder } from '../api';
 import type { Package } from '../types';
+import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import { formatError } from '../utils/errors';
+import type { FriendlyError } from '../utils/errors';
 
 // 次卡套餐
 const creditPackages: Package[] = [
@@ -64,7 +67,7 @@ const Recharge = () => {
   const [orderNo, setOrderNo] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<FriendlyError | null>(null);
   const [success, setSuccess] = useState(false);
   const [payUrl, setPayUrl] = useState('');
   const [paymentMode, setPaymentMode] = useState('manual');
@@ -118,39 +121,53 @@ const Recharge = () => {
   };
 
   const handleCreateOrder = async () => {
-    if (!selectedPackage) return;
+    if (!selectedPackage) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '请先选择一个套餐',
+        detail: '点击上面的任意一个套餐卡片先选中它，\n然后再点底部的「立即购买」按钮。',
+      });
+      return;
+    }
 
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
       const res = await createOrder(selectedPackage.id);
       if (res.data.success) {
         setOrderNo(res.data.order.order_no);
         setPaymentMode(res.data.paymentMode || 'manual');
-        
+
         // 易支付模式，直接跳转到支付页面
         if (res.data.paymentMode === 'epay' && res.data.payUrl) {
           window.location.href = res.data.payUrl;
           return;
         }
-        
+
         setShowPayment(true);
       } else {
-        setError(res.data.message || '创建订单失败');
+        setError(formatError(res.data, '创建订单失败'));
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || '创建订单失败，请稍后重试');
+      setError(formatError(err, '创建订单失败'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleCheckPayment = async () => {
-    if (!orderNo) return;
+    if (!orderNo) {
+      setError({
+        category: 'INPUT_VALIDATION',
+        title: '缺少订单号',
+        detail: '没有订单号无法查询支付状态。\n请回到上一步，重新选择套餐并下单。',
+      });
+      return;
+    }
 
     setChecking(true);
-    setError('');
+    setError(null);
 
     try {
       const res = await verifyOrder(orderNo);
@@ -159,10 +176,24 @@ const Recharge = () => {
         // 刷新用户信息（会员状态或余额）
         await refreshUser();
       } else {
-        setError('尚未收到支付，请稍后再试');
+        const status = res.data.order?.status;
+        const statusText: Record<string, string> = {
+          pending: '我们还在等支付回调，可能你刚付完款银行还没通知。',
+          failed: '这笔订单之前支付失败了，建议换个方式重新下单。',
+          cancelled: '这笔订单已经取消了，无法再查询。请重新选择套餐下单。',
+        };
+        setError({
+          category: 'PAYMENT_FAILED',
+          title: '尚未收到支付确认',
+          detail:
+            '你扫码付款成功了，但系统这边暂时还没收到到账通知。\n' +
+            (status
+              ? `当前订单状态：${statusText[status] || status}`
+              : '请耐心等待 1~2 分钟，然后再点击查询一次。\n如果几分钟后还是这个结果，请联系管理员手动确认。'),
+        });
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || '查询失败，请稍后重试');
+      setError(formatError(err, '查询订单失败'));
     } finally {
       setChecking(false);
     }
@@ -237,15 +268,19 @@ const Recharge = () => {
           ) : (
             <>
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm mb-4">
-                  {error}
-                </div>
+                <FriendlyErrorBox
+                  error={error}
+                  onRetry={() => handleCheckPayment()}
+                  onDismiss={() => setError(null)}
+                  className="mb-4"
+                />
               )}
 
               <button
                 onClick={handleCheckPayment}
                 disabled={checking}
                 className="w-full px-6 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors mb-3 disabled:opacity-50"
+                title="付款成功后点这里刷新订单状态"
               >
                 {checking ? '查询中...' : '我已支付，查询'}
               </button>
@@ -359,8 +394,12 @@ const Recharge = () => {
       </div>
 
       {error && (
-        <div className="max-w-md mx-auto mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-center">
-          {error}
+        <div className="max-w-md mx-auto mb-6">
+          <FriendlyErrorBox
+            error={error}
+            onRetry={() => handleCreateOrder()}
+            onDismiss={() => setError(null)}
+          />
         </div>
       )}
 
@@ -369,6 +408,13 @@ const Recharge = () => {
           onClick={handleCreateOrder}
           disabled={loading || !selectedPackage}
           className="px-12 py-4 bg-gray-900 text-white rounded-lg font-medium text-lg hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+          title={
+            !selectedPackage
+              ? '请先点击上面的任意一个套餐卡片选中它'
+              : loading
+                ? '正在创建订单，请稍候...'
+                : '点击创建订单并跳转到支付'
+          }
         >
           {loading ? '处理中...' : '立即购买'}
         </button>
