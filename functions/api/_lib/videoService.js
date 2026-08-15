@@ -60,37 +60,40 @@ function calculateFrames(duration) {
   return { num_frames: numFrames, frame_rate: frameRate };
 }
 
-// 计算分辨率（768p 级别，官方标准规格）
+// 计算分辨率（1080p 级别，比原 768p 清晰度翻倍）
+// 注意：宽高必须符合 Agnes 官方约束（8 的倍数），否则会被服务端拒绝
 function calculateResolution(aspectRatio) {
   switch (aspectRatio) {
     case '9:16':
-      return { width: 432, height: 768 };
+      return { width: 1080, height: 1920 };
     case '1:1':
-      return { width: 768, height: 768 };
+      return { width: 1080, height: 1080 };
     case '4:3':
-      return { width: 1024, height: 768 };
+      return { width: 1440, height: 1080 };
     case '3:4':
-      return { width: 576, height: 768 };
+      return { width: 810, height: 1080 };
     case '16:9':
     default:
-      return { width: 1152, height: 768 }; // 官方标准 16:9 分辨率
+      return { width: 1920, height: 1080 }; // 官方标准 16:9 1080p
   }
 }
 
 // 风格关键词映射（精简版，避免提示词过长）
+// 全部追加 sharp focus / ultra detailed / highly detailed 以压制模糊感
 const styleKeywords = {
-  realistic: 'photorealistic, real photo, highly detailed, sharp focus, real person, real skin, professional photography, 8k uhd, ',
-  anime: 'anime style, japanese anime, vibrant colors, anime artwork, studio ghibli style, masterpiece, best quality, ',
-  '3d': '3d render, octane render, CGI, pixar style, unreal engine 5, highly detailed, cinematic lighting, ',
-  cinematic: 'cinematic, film grain, dramatic lighting, cinematic color grading, live action, real people, shot on film, highly detailed, sharp focus, ',
+  realistic: 'photorealistic, real photo, ultra detailed, highly detailed, sharp focus, real person, real skin, professional photography, 8k uhd, masterpiece, best quality, ',
+  anime: 'anime style, japanese anime, vibrant colors, anime artwork, studio ghibli style, ultra detailed, sharp focus, masterpiece, best quality, ',
+  '3d': '3d render, octane render, CGI, pixar style, unreal engine 5, ultra detailed, sharp focus, cinematic lighting, masterpiece, best quality, ',
+  cinematic: 'cinematic, film grain, dramatic lighting, cinematic color grading, live action, real people, shot on film, ultra detailed, sharp focus, masterpiece, best quality, ',
 };
 
 // 风格对应的负面提示词（精简版 + 避免畸形扭曲）
+// 全部强化：加 motion blur / jitter / morphed / warped / extra fingers / fused
 const styleNegativeKeywords = {
-  realistic: 'anime, cartoon, 2d, manga, 3d render, cgi, game, plastic, fake, blurry, out of focus, low quality, ugly, watermark, text, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
-  anime: 'realistic, photo, 3d render, cgi, photorealistic, live action, blurry, out of focus, low quality, ugly, watermark, text, sketch, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
-  '3d': 'anime, 2d, cartoon, realistic, photo, photorealistic, hand drawn, blurry, out of focus, low quality, ugly, watermark, text, low poly, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
-  cinematic: 'anime, cartoon, 2d, manga, 3d render, cgi, blurry, out of focus, low quality, ugly, watermark, text, cheap, home video, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, ',
+  realistic: 'anime, cartoon, 2d, manga, 3d render, cgi, game, plastic, fake, blurry, out of focus, low quality, ugly, watermark, text, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, motion blur, jitter, morphed, warped, extra fingers, fused fingers, long neck, cloned face, ',
+  anime: 'realistic, photo, 3d render, cgi, photorealistic, live action, blurry, out of focus, low quality, ugly, watermark, text, sketch, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, motion blur, jitter, morphed, warped, extra fingers, fused fingers, long neck, cloned face, ',
+  '3d': 'anime, 2d, cartoon, realistic, photo, photorealistic, hand drawn, blurry, out of focus, low quality, ugly, watermark, text, low poly, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, motion blur, jitter, morphed, warped, extra fingers, fused fingers, long neck, cloned face, ',
+  cinematic: 'anime, cartoon, 2d, manga, 3d render, cgi, blurry, out of focus, low quality, ugly, watermark, text, cheap, home video, deformed, distorted, disfigured, bad anatomy, extra limbs, missing limbs, mutated, bad proportions, motion blur, jitter, morphed, warped, extra fingers, fused fingers, long neck, cloned face, ',
 };
 
 // 创建视频生成任务
@@ -141,6 +144,11 @@ export async function createVideoTask(params, env) {
     width,
     num_frames,
     frame_rate,
+    // 默认推到 1080p 后，必须给一个合理的步数和引导系数，否则细节会糊
+    // 30 步是 Agnes Video v2.0 在 1080p 下的推荐值（官方 quality/speed 平衡点）
+    num_inference_steps: num_inference_steps != null ? num_inference_steps : 30,
+    // guidance_scale 7.5 是 diffusion 模型的工业标准值，太低会偏离 prompt，太高会过度饱和畸变
+    guidance_scale: 7.5,
   };
 
   // 根据模式设置不同参数（严格按官方文档）
@@ -166,9 +174,7 @@ export async function createVideoTask(params, env) {
   if (seed !== null) {
     requestBody.seed = seed;
   }
-  if (num_inference_steps !== null) {
-    requestBody.num_inference_steps = num_inference_steps;
-  }
+  // num_inference_steps 已经在 requestBody 默认值里处理过（30 或用户传入值）
 
   console.log('Agnes AI 参数:', {
     model: 'agnes-video-v2.0',

@@ -5,6 +5,7 @@ import { generateVideo, uploadImage } from '../api';
 import { VIDEO_STYLES, VIDEO_DURATIONS, ASPECT_RATIOS, VIDEO_MODES } from '../types';
 import ChatPanel from '../components/ChatPanel';
 import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import GenerationProgressCard from '../components/GenerationProgressCard';
 import { formatError } from '../utils/errors';
 import type { FriendlyError } from '../utils/errors';
 
@@ -26,8 +27,13 @@ const VideoGenerate = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<FriendlyError | null>(null);
+  const [showProgress, setShowProgress] = useState(false);
 
   const currentCost = VIDEO_DURATIONS.find(d => d.value === duration)?.cost || 1;
+
+  // 预估生成时长（秒）：1080p 比原 768p 慢，按时长分档
+  // 5秒视频约 90 秒、10秒约 180 秒、18秒约 300 秒
+  const estimatedSeconds = duration === 5 ? 90 : duration === 10 ? 180 : 300;
 
   // 压缩图片并转 Base64
   const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.8): Promise<string> => {
@@ -276,6 +282,7 @@ const VideoGenerate = () => {
 
     setLoading(true);
     setError(null);
+    setShowProgress(false);
 
     try {
       const params: any = {
@@ -298,15 +305,16 @@ const VideoGenerate = () => {
       if (res.data.success) {
         // 扣除本地余额，立马看到效果
         deductCredits(currentCost);
-        // 跳转到历史记录
-        navigate('/history');
+        // 不立即跳转，改为显示按预估时长走的进度卡片
+        setLoading(false);
+        setShowProgress(true);
       } else {
         setError(formatError(res.data, '生成失败'));
+        setLoading(false);
       }
     } catch (err: any) {
       console.error('视频生成错误:', err.response?.data || err);
       setError(formatError(err, '视频生成失败'));
-    } finally {
       setLoading(false);
     }
   };
@@ -545,6 +553,19 @@ const VideoGenerate = () => {
           </div>
         )}
 
+        {showProgress && (
+          <div className="mb-6">
+            <GenerationProgressCard
+              active={showProgress}
+              estimatedSeconds={estimatedSeconds}
+              kind="视频"
+              historyPath="/history"
+              onGoHistory={() => navigate('/history')}
+              onCancel={() => setShowProgress(false)}
+            />
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-500">
             本次消耗 <span className="text-gray-900 font-medium">{currentCost}</span> 次
@@ -561,23 +582,27 @@ const VideoGenerate = () => {
           </div>
           <button
             onClick={handleGenerate}
-            disabled={loading || !prompt.trim() || uploading}
+            disabled={loading || showProgress || !prompt.trim() || uploading}
             className="px-8 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2"
             title={
               loading
-                ? '正在生成视频，请勿重复点击'
-                : !prompt.trim()
-                  ? '请先填写视频描述'
-                  : uploading
-                    ? '请等图片上传完成'
-                    : '点击开始生成视频'
+                ? '正在提交生成请求，请勿重复点击'
+                : showProgress
+                  ? '当前已有任务在生成中，请等待完成或查看进度卡片'
+                  : !prompt.trim()
+                    ? '请先填写视频描述'
+                    : uploading
+                      ? '请等图片上传完成'
+                      : '点击开始生成视频'
             }
           >
             {loading ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                生成中...
+                提交中...
               </>
+            ) : showProgress ? (
+              '生成中...'
             ) : (
               '开始生成'
             )}

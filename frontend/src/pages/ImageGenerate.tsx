@@ -5,6 +5,7 @@ import { generateImage, uploadImage } from '../api';
 import { IMAGE_SIZES, IMAGE_STYLES, IMAGE_MODES } from '../types';
 import ChatPanel from '../components/ChatPanel';
 import FriendlyErrorBox from '../components/FriendlyErrorBox';
+import GenerationProgressCard from '../components/GenerationProgressCard';
 import { formatError } from '../utils/errors';
 import type { FriendlyError } from '../utils/errors';
 
@@ -16,17 +17,20 @@ export default function ImageGenerate() {
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [style, setStyle] = useState('realistic');
-  const [size, setSize] = useState('1024x768');
+  const [size, setSize] = useState('2048x1536');
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referenceImageBase64, setReferenceImageBase64] = useState('');
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState<FriendlyError | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
+  const [forceDone, setForceDone] = useState(false);
 
   const cost = 1; // 每张图片消耗 1 次
+
+  // 2K 图片预估生成时长（秒）：2K 比 1K 慢，给 35 秒
+  const estimatedSeconds = 35;
 
   // 压缩图片并转 Base64
   const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.8): Promise<string> => {
@@ -162,20 +166,8 @@ export default function ImageGenerate() {
 
     setLoading(true);
     setError(null);
-    setGeneratedImage(null);
-    setProgress(0);
-
-    // 启动进度条动画（预估25秒）
-    const estimatedTime = 25;
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += (90 / estimatedTime); // 最多到90%，留10%给最后处理
-      if (currentProgress >= 90) {
-        currentProgress = 90;
-        clearInterval(interval);
-      }
-      setProgress(currentProgress);
-    }, 1000);
+    setShowProgress(true);
+    setForceDone(false);
 
     try {
       const params: any = {
@@ -193,22 +185,20 @@ export default function ImageGenerate() {
       const res = await generateImage(params);
 
       if (res.data.success) {
-        setProgress(100); // 完成，到100%
-        setTimeout(() => {
-          setGeneratedImage(res.data.image.image_url);
-          // 扣除本地余额，立马看到效果
-          deductCredits(cost);
-        }, 500);
+        // 扣除本地余额，立马看到效果
+        deductCredits(cost);
+        // API 返回成功：进度卡片立即跳到 100% 显示完成
+        setForceDone(true);
+        setLoading(false);
       } else {
         setError(formatError(res.data, '生成失败'));
+        setShowProgress(false);
+        setLoading(false);
       }
     } catch (err: any) {
       setError(formatError(err, '图片生成失败'));
-    } finally {
-      clearInterval(interval);
-      setTimeout(() => {
-        setLoading(false);
-      }, 800); // 延迟一下，让用户看到100%的进度
+      setShowProgress(false);
+      setLoading(false);
     }
   };
 
@@ -386,11 +376,13 @@ export default function ImageGenerate() {
           <div className="relative">
             <button
               onClick={handleGenerate}
-              disabled={loading || !prompt.trim() || uploading || (mode === 'image2image' && !referenceImageUrl)}
-              className="px-8 py-3 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 relative overflow-hidden min-w-[140px]"
+              disabled={loading || showProgress || !prompt.trim() || uploading || (mode === 'image2image' && !referenceImageUrl)}
+              className="px-8 py-3 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2 min-w-[140px] justify-center"
               title={
                 loading
-                  ? '正在生成图片，请勿重复点击'
+                  ? '正在提交生成请求，请勿重复点击'
+                  : showProgress
+                    ? '当前已有任务在生成中，请等待完成或查看进度卡片'
                   : !prompt.trim()
                     ? '请先填写图片描述'
                     : uploading
@@ -401,17 +393,14 @@ export default function ImageGenerate() {
               }
             >
               {loading ? (
-                <span className="relative z-10 flex items-center justify-center gap-2">
-                  {Math.round(progress)}%
-                </span>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  提交中...
+                </>
+              ) : showProgress ? (
+                '生成中...'
               ) : (
                 '生成图片'
-              )}
-              {loading && (
-                <div
-                  className="absolute inset-0 bg-gray-700 transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
               )}
             </button>
           </div>
@@ -428,33 +417,18 @@ export default function ImageGenerate() {
           </div>
         )}
 
-        {/* 生成结果 */}
-        {generatedImage && (
-          <div className="mt-8 pt-6 border-t border-gray-100">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">生成结果</h3>
-            <div className="relative rounded-xl overflow-hidden bg-gray-100 shadow-md">
-              <img
-                src={generatedImage}
-                alt="Generated"
-                className="w-full h-auto"
-              />
-            </div>
-            <div className="mt-4 flex gap-3">
-              <a
-                href={generatedImage}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-              >
-                查看原图
-              </a>
-              <button
-                onClick={() => navigate('/image-history')}
-                className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-              >
-                查看历史记录
-              </button>
-            </div>
+        {/* 生成进度卡片（按预估时长走，完成后提示去历史记录查看） */}
+        {showProgress && (
+          <div className="mt-6">
+            <GenerationProgressCard
+              active={showProgress}
+              estimatedSeconds={estimatedSeconds}
+              kind="图片"
+              historyPath="/image-history"
+              forceDone={forceDone}
+              onGoHistory={() => navigate('/image-history')}
+              onCancel={() => { setShowProgress(false); setForceDone(false); }}
+            />
           </div>
         )}
           </div>
