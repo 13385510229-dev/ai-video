@@ -1,6 +1,6 @@
 import { jsonResponse, errorResponse, errorResponseEx, handleOptions, requireAuth, rateLimit } from '../_lib/auth.js';
 import { generateImage } from '../_lib/imageService.js';
-import { deductCredits, ERROR_CODES } from '../_lib/membership.js';
+import { deductCredits, refundCredits, ERROR_CODES } from '../_lib/membership.js';
 import { acquireUpstreamSeat, releaseUpstreamSeat } from '../_lib/upstreamSemaphore.js';
 
 function upstreamToErrorCode(type) {
@@ -84,22 +84,26 @@ export async function onRequestPost(context) {
 
     const cost = 1;
 
-    // ========== 先拿上游并发席位，不先扣费 ==========
-    // 图片接口是同步接口（每个请求占一个上游连接直到生成完毕，最多 120s）。
-    // 如果我们不主动限制并发，Agnes 会用 429 拒掉 90%，然后我们的服务就会陷入大量
-    // 扣费-回滚的闪变，用户体验极差。
-    const sem = await acquireUpstreamSeat('image', env);
-    if (!sem.acquired) {
-      const retrySec = Math.max(3, Math.ceil((sem.retryAfterMs || 5000) / 1000));
-      return errorResponseEx(
-        `当前正在生成图片的人较多（${sem.currentCount || '已有'}/${sem.max || '上限'}），系统为避免请求被模型方拒绝而暂未为您创建任务。`,
-        {
-          status: 429,
-          error_code: ERROR_CODES.UPSTREAM_BUSY,
-          retry_after_ms: sem.retryAfterMs || 5000,
-          details: { current: sem.currentCount, max: sem.max, retrySec },
-        }
-      );
+    // 未配置 AGNES_API_KEY：直接走模拟模式，不占用"上游席位"
+    const useRealAgnes = !!env.AGNES_API_KEY;
+    let semToken: string | undefined;
+    if (useRealAgnes) {
+      // ========== 先拿上游并发席位，不先扣费 ==========
+      // 图片接口是同步接口（每个请求占一个上游连接直到生成完毕，最多 120s）。
+      const sem = await acquireUpstreamSeat('image', env);
+      if (!sem.acquired) {
+        const retrySec = Math.max(3, Math.ceil((sem.retryAfterMs || 5000) / 1000));
+        return errorResponseEx(
+          `当前正在生成图片的人较多（${sem.currentCount || '已有'}/${sem.max || '上限'}），系统为避免请求被模型方拒绝而暂未为您创建任务。`,
+          {
+            status: 429,
+            error_code: ERROR_CODES.UPSTREAM_BUSY,
+            retry_after_ms: sem.retryAfterMs || 5000,
+            details: { current: sem.currentCount, max: sem.max, retrySec },
+          }
+        );
+      }
+      semToken = sem.token;
     }
 
     // ========== 扣次数 ==========
@@ -111,9 +115,9 @@ export async function onRequestPost(context) {
       env.SUPABASE_SERVICE_ROLE_KEY
     );
     if (!deductResult.success) {
-      try {
-        await releaseUpstreamSeat('image', sem.token, env);
-      } catch (_) {}
+      if (useRealAgnes && semToken) {
+        try { await releaseUpstreamSeat('image', semToken, env); } catch (_) {}
+      }
       return errorResponseEx(deductResult.error || '余额不足，请充值后再生成', {
         status: 400,
         error_code: deductResult.error_code || ERROR_CODES.BALANCE_INSUFFICIENT,
@@ -125,7 +129,7 @@ export async function onRequestPost(context) {
     }
 
     // ========== 调用 Agnes 生成图片 ==========
-    // 图片同步生成：席位从开始占用到结束才释放
+    // 图片同步生成：席位从开始占用到结束才释放（由 finally 统一释放）
     let genResult: any = null;
     try {
       genResult = await generateImage({
@@ -142,12 +146,10 @@ export async function onRequestPost(context) {
         throw new Error(genResult?.error || 'API returned failed');
       }
     } catch (genError: any) {
-      // 失败必须退还次数 + 释放席位
+      // 失败：退还次数
       try {
-        await releaseUpstreamSeat('image', sem.token, env);
-      } catch (_) {}
-      try {
-        await rollbackDeducted(userId, cost, deductResult.used_daily, env);
+        await refundCredits(userId, cost, !!deductResult.used_daily,
+          env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
       } catch (_) {}
 
       const mappedCode = upstreamToErrorCode(genError?.upstreamType);
@@ -166,15 +168,16 @@ export async function onRequestPost(context) {
       }
       return errorResponse(genError.message || '生成失败，请稍后重试', 502);
     } finally {
-      try {
-        await releaseUpstreamSeat('image', sem.token, env);
-      } catch (_) {}
+      if (useRealAgnes && semToken) {
+        try { await releaseUpstreamSeat('image', semToken, env); } catch (_) {}
+      }
     }
 
     // 模拟模式（本地测试用），也退次数
     if (genResult.mode && genResult.mode.startsWith('simulation')) {
       try {
-        await rollbackDeducted(userId, cost, deductResult.used_daily, env);
+        await refundCredits(userId, cost, !!deductResult.used_daily,
+          env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
       } catch (_) {}
     }
 
@@ -225,52 +228,6 @@ export async function onRequestPost(context) {
     console.error('生成图片接口错误:', error);
     return errorResponse('生成失败，请稍后重试', 500);
   }
-}
-
-async function rollbackDeducted(userId: any, cost: number, usedDaily: boolean | undefined, env: any) {
-  const supabaseUrl = env.SUPABASE_URL;
-  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
-  try {
-    if (usedDaily) {
-      const u = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=daily_credits_used`, {
-        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-      });
-      if (u.ok) {
-        const arr = await u.json();
-        if (arr?.[0]) {
-          const cur = arr[0].daily_credits_used || 0;
-          await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-            method: 'PATCH',
-            headers: {
-              apikey: serviceKey,
-              Authorization: `Bearer ${serviceKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ daily_credits_used: Math.max(0, cur - cost) }),
-          });
-        }
-      }
-    } else {
-      const u = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=balance`, {
-        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-      });
-      if (u.ok) {
-        const arr = await u.json();
-        if (arr?.[0]) {
-          const cur = arr[0].balance || 0;
-          await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-            method: 'PATCH',
-            headers: {
-              apikey: serviceKey,
-              Authorization: `Bearer ${serviceKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ balance: cur + cost }),
-          });
-        }
-      }
-    }
-  } catch (_) {}
 }
 
 export async function onRequestOptions(context) {

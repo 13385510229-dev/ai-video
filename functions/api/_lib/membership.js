@@ -380,6 +380,98 @@ export async function deductCredits(
   };
 }
 
+// 退还次数（上游 Agnes 调用失败 / 模拟模式时调用）
+// 与 deductCredits 对称的并发安全：每次 CAS 循环读最新值 + WHERE 条件保护写回
+//   - usedDaily=true  → 把 daily_credits_used 减回来（最多减到 0，lte 保护）
+//   - usedDaily=false → 把 balance 加回来
+export async function refundCredits(
+  userId,
+  cost,
+  usedDaily,
+  supabaseUrl,
+  serviceKey
+) {
+  const MAX_RETRY = 5;
+  if (!Number.isFinite(cost) || cost <= 0 || cost > 99999) {
+    // 参数无效：不要抛错打断主流程，静默记 warn
+    console.warn('[refundCredits] 非法 cost，跳过退款:', cost);
+    return { success: false, error_code: ERROR_CODES.INVALID_COST };
+  }
+
+  for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+    try {
+      const userInfo = await fetchUserById(
+        userId,
+        supabaseUrl,
+        serviceKey,
+        'id,balance,daily_credits_used,daily_credits_total,is_member'
+      );
+      if (!userInfo) {
+        return { success: false, error_code: ERROR_CODES.USER_NOT_FOUND };
+      }
+
+      if (usedDaily) {
+        // --- 回退每日使用量 ---
+        // 1. 防止越界（退成负数）：用 lte.cur-0 写回 Math.max(0, cur-cost)
+        const cur = Math.max(0, userInfo.daily_credits_used || 0);
+        // 如果本来就没扣过（cur==0），认为"无需退还"成功
+        if (cur === 0) return { success: true };
+        const target = Math.max(0, cur - cost);
+        // WHERE 条件：daily_credits_used >= target（保证其他人没有把我退的值再扣掉）
+        const upRes = await fetch(
+          `${supabaseUrl}/rest/v1/users?id=eq.${userId}&daily_credits_used=gte.${target}`,
+          {
+            method: 'PATCH',
+            headers: {
+              apikey: serviceKey,
+              Authorization: `Bearer ${serviceKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=representation',
+            },
+            body: JSON.stringify({ daily_credits_used: target }),
+          }
+        );
+        if (!upRes.ok) throw new Error('PATCH daily_credits_used failed');
+        const rows = await upRes.json();
+        if (rows && rows.length > 0) {
+          return { success: true, daily_credits_used: rows[0].daily_credits_used };
+        }
+        // 0 rows = CAS 冲突，下一轮重试
+        continue;
+      } else {
+        // --- 回退永久余额 ---
+        const cur = Math.max(0, userInfo.balance || 0);
+        const target = cur + cost;
+        // WHERE：balance == cur（其他人没改过这个值的情况下才更新），防止多退
+        const upRes = await fetch(
+          `${supabaseUrl}/rest/v1/users?id=eq.${userId}&balance=eq.${cur}`,
+          {
+            method: 'PATCH',
+            headers: {
+              apikey: serviceKey,
+              Authorization: `Bearer ${serviceKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=representation',
+            },
+            body: JSON.stringify({ balance: target }),
+          }
+        );
+        if (!upRes.ok) throw new Error('PATCH balance failed');
+        const rows = await upRes.json();
+        if (rows && rows.length > 0) {
+          return { success: true, balance: rows[0].balance };
+        }
+        continue;
+      }
+    } catch (err) {
+      console.warn(`[refundCredits] 第${attempt + 1}次尝试失败：`, err?.message || err);
+    }
+  }
+
+  console.error('[refundCredits] 并发冲突，退还次数仍未完成（用户ID=' + userId + '，cost=' + cost + '），请人工核对账目');
+  return { success: false, error_code: ERROR_CODES.CONCURRENT_CONFLICT };
+}
+
 // 开通会员
 export async function activateMembership(userId, planType, supabaseUrl, serviceKey) {
   try {

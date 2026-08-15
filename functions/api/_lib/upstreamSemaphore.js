@@ -14,16 +14,27 @@
 // 这不是 100% 精准的（多 Worker 实例 CAS 有毫秒级竞态会让计数偶尔超 1~2），
 // 但对 Agnes 模型这种"宁少不多，不阻塞 Worker 不雪崩"的场景已经完全够用。
 
-// 默认上限：留一点余量给 Agnes 的免费档/入门档（他们一般给 3~10 并发）
+// 默认上限（尽量放开到主流 Agnes 入门/付费档的"最大安全值"）
+// 调用方可以在 Workers 环境变量里再改大/改小：
+//   MAX_CONCURRENT_VIDEO / MAX_CONCURRENT_IMAGE   并发数量
+//   UPSTREAM_VIDEO_LEASE_TTL_SEC / UPSTREAM_IMAGE_LEASE_TTL_SEC  席位 TTL
 const DEFAULT_CONCURRENCY = {
-  video: 6,   // 视频任务异步创建但占用 Agnes 调度，上限比图片略高
-  image: 4,   // 图片是同步接口，每个都占一个连接直到 120s，保守一点
+  video: 30,  // 视频是异步创建 task，只占用"创建接口"那一下，并发可以给很高
+  image: 15,  // 图片是同步接口（最多 120s），每个都占一个上游连接
 };
 
 // 每个席位的 TTL（最长保护时间），对应 Agnes 接口超时
 const DEFAULT_LEASE_TTL_SEC = {
   video: 500,   // 视频 API 超时 480s，略长 20s 做保护
   image: 130,   // 图片 API 超时 120s，略长 10s 做保护
+};
+
+// counter key 自身的 TTL 兜底：即使所有席位 TTL 都过期、且没人触发 clean，
+// 这么久之后 counter 也会归零，避免"一个 Worker 崩了，永久卡死在上限"。
+// 取两倍最大 leaseTtl，保证在正常使用下不会误清零。
+const COUNTER_TTL_SEC = {
+  video: 1000,
+  image: 260,
 };
 
 const PREFIX = 'upstreamsem';
@@ -37,6 +48,7 @@ function safeParseInt(x, fallback) {
 function getConfig(env, name) {
   let max: number = DEFAULT_CONCURRENCY[name] || 4;
   let leaseTtl: number = DEFAULT_LEASE_TTL_SEC[name] || 300;
+  let counterTtl: number = COUNTER_TTL_SEC[name] || 600;
 
   if (name === 'video') {
     const envMax = safeParseInt(env?.MAX_CONCURRENT_VIDEO, 0);
@@ -50,7 +62,7 @@ function getConfig(env, name) {
     if (envTtl > 0) leaseTtl = envTtl;
   }
 
-  return { max, leaseTtl };
+  return { max, leaseTtl, counterTtl };
 }
 
 function memory(name) {
@@ -88,53 +100,82 @@ export async function acquireUpstreamSeat(
   env: Record<string, any>,
   opts?: { maxOverride?: number }
 ) {
-  const { max, leaseTtl } = getConfig(env, name);
+  const { max, leaseTtl, counterTtl } = getConfig(env, name);
   const effectiveMax = opts?.maxOverride && opts.maxOverride > 0 ? opts.maxOverride : max;
 
   const token = genToken();
   const counterKey = `${PREFIX}:${name}:counter`;
-  const seatKey = `${PREFIX}:${name}:${token}`;
+  const seatKeyPrefix = `${PREFIX}:${name}:`;
+  const seatKey = `${seatKeyPrefix}${token}`;
 
   // --- 1. 走 KV（生产推荐）---
   if (env?.KV_CACHE) {
     try {
-      // 简单 CAS 循环：最多尝试 3 次，有极小概率多人同时 write 覆盖导致计数偏大（1~2）
-      // 但在这个应用里宁多 1、不少 1（少 1 会让合法请求被误杀）
+      // 简单 CAS 循环：最多尝试 3 次
       let lastCount = 0;
       for (let attempt = 0; attempt < 3; attempt++) {
-        const raw = await env.KV_CACHE.get(counterKey);
-        const current = raw ? safeParseInt(raw, 0) : 0;
-        lastCount = current;
+        let raw = await env.KV_CACHE.get(counterKey);
+        let current = raw ? safeParseInt(raw, 0) : 0;
 
+        // ============ 关键：counter >= max 时不直接拒绝，先做"僵尸席位清理" ============
+        // 之前的实现里：如果 Worker 崩了，席位 key 会被 TTL 自动删掉，
+        // 但是 counter key 里的数字不会变，会越积越大，最后所有人都排不上队。
+        // 修复：当 current 看起来已经满员时，用 KV.list 精确数一下还存在的 seatKey，
+        // 把 counter 修正为真实数量。
         if (current >= effectiveMax) {
-          // 超限，不给席位
+          try {
+            // list 列出 `${PREFIX}:${name}:` 前缀下的所有 key（不含 counter 自己）
+            const list = await env.KV_CACHE.list({ prefix: seatKeyPrefix, limit: effectiveMax + 50 });
+            const aliveSeats = (list?.keys || []).filter((k: any) => k && k.name !== counterKey).length;
+
+            // 把 counter 修正为真的活着的席位数量
+            current = aliveSeats;
+            await env.KV_CACHE.put(counterKey, String(aliveSeats), { expirationTtl: counterTtl });
+
+            console.warn(`[upstreamSem:${name}] 僵尸清理：旧 counter=${raw}，实际 aliveSeats=${aliveSeats}（上限 ${effectiveMax}）`);
+
+            // 如果清理后还是 >= max：说明真的满了
+            if (aliveSeats >= effectiveMax) {
+              return {
+                acquired: false,
+                currentCount: aliveSeats,
+                max: effectiveMax,
+                retryAfterMs: 3000 + Math.floor(Math.random() * 4000),
+              };
+            }
+          } catch (cleanErr) {
+            console.warn('[upstreamSem] 僵尸席位清理失败（忽略，继续用旧值）:', cleanErr?.message || cleanErr);
+          }
+        }
+
+        lastCount = current;
+        if (current >= effectiveMax) {
           return {
             acquired: false,
             currentCount: current,
             max: effectiveMax,
-            retryAfterMs: 3000 + Math.floor(Math.random() * 4000), // 3~7 秒抖一下
+            retryAfterMs: 3000 + Math.floor(Math.random() * 4000),
           };
         }
 
-        // 尝试写入 +1，并立即创建席位 key（带 TTL 兜底）
-        await env.KV_CACHE.put(counterKey, String(current + 1));
+        // 尝试写入 +1，**并且 counter key 自己也带 TTL**（防止 Worker 全局崩溃后 counter 永远不变）
+        await env.KV_CACHE.put(counterKey, String(current + 1), { expirationTtl: counterTtl });
         await env.KV_CACHE.put(seatKey, '1', { expirationTtl: leaseTtl });
 
-        // 回读确认没有被别人覆盖（弱 CAS）——如果和我们写的不一致就重试
+        // 回读确认没有被别人覆盖（弱 CAS）
         const verify = await env.KV_CACHE.get(counterKey);
         const finalCount = verify ? safeParseInt(verify, 0) : 0;
         if (finalCount >= current + 1 && finalCount <= effectiveMax) {
-          // 成功
           return { acquired: true, token, max: effectiveMax };
         }
 
-        // 冲突了：把自己创建的席位 key 清掉，然后下一轮重试
+        // 冲突了：把自己创建的席位 key 清掉，下一轮重试
         try {
           await env.KV_CACHE.delete(seatKey);
         } catch (_) {}
       }
 
-      // 3 次 CAS 都冲突：保守按"当前满员"处理，给出稍长的退避
+      // 3 次 CAS 都冲突
       return {
         acquired: false,
         currentCount: lastCount,
@@ -162,7 +203,6 @@ export async function acquireUpstreamSeat(
     m.seats.set(token, Date.now() + leaseTtl * 1000);
     return { acquired: true, token, max: effectiveMax };
   } catch (memErr) {
-    // 内存也崩了？不可能，但为了不让上游被打爆，默认放行一小部分（通过调用方兜底）
     console.warn('[upstreamSem] 内存信号量失败，放行:', memErr?.message || memErr);
     return { acquired: true, token: `fallback-${token}`, max: effectiveMax };
   }

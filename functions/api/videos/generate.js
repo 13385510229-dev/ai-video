@@ -1,7 +1,7 @@
 import { jsonResponse, errorResponse, errorResponseEx, handleOptions, requireAuth, rateLimit } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
 import { createVideoTask, calculateCost } from '../_lib/videoService.js';
-import { deductCredits, ERROR_CODES } from '../_lib/membership.js';
+import { deductCredits, refundCredits, ERROR_CODES } from '../_lib/membership.js';
 import { acquireUpstreamSeat, releaseUpstreamSeat } from '../_lib/upstreamSemaphore.js';
 
 // 把 videoService 抛出的结构化 UpstreamError 映射到 ERROR_CODES
@@ -101,25 +101,31 @@ export async function onRequestPost(context) {
     // 计算成本
     const cost = calculateCost(cleanDuration);
 
-    // ========== 先拿上游并发席位，不先扣费 ==========
-    // 如果 Agnes 上游的并发已经满了，直接告诉用户"稍后再试"，不会碰用户任何余额，
-    // 避免"先扣钱再发现模型打不进去、再退款，用户余额闪变"的极差体验。
-    const sem = await acquireUpstreamSeat('video', env);
-    if (!sem.acquired) {
-      const retrySec = Math.max(3, Math.ceil((sem.retryAfterMs || 5000) / 1000));
-      return errorResponseEx(
-        `当前正在生成视频的人较多（${sem.currentCount || '已有'}/${sem.max || '上限'}），系统为避免请求被模型方拒绝而暂未为您创建任务。`,
-        {
-          status: 429,
-          error_code: ERROR_CODES.UPSTREAM_BUSY,
-          retry_after_ms: sem.retryAfterMs || 5000,
-          details: { current: sem.currentCount, max: sem.max, retrySec },
-        }
-      );
+    // 未配置 AGNES_API_KEY：直接走模拟模式，不占用"上游席位"
+    // （否则本地 dev 时用户永远被拦截为"上游很忙"）
+    const useRealAgnes = !!env.AGNES_API_KEY;
+    let semToken: string | undefined;
+    if (useRealAgnes) {
+      // ========== 先拿上游并发席位，不先扣费 ==========
+      // 如果 Agnes 上游的并发已经满了，直接告诉用户"稍后再试"，不会碰用户任何余额，
+      // 避免"先扣钱再发现模型打不进去、再退款，用户余额闪变"的极差体验。
+      const sem = await acquireUpstreamSeat('video', env);
+      if (!sem.acquired) {
+        const retrySec = Math.max(3, Math.ceil((sem.retryAfterMs || 5000) / 1000));
+        return errorResponseEx(
+          `当前正在生成视频的人较多（${sem.currentCount || '已有'}/${sem.max || '上限'}），系统为避免请求被模型方拒绝而暂未为您创建任务。`,
+          {
+            status: 429,
+            error_code: ERROR_CODES.UPSTREAM_BUSY,
+            retry_after_ms: sem.retryAfterMs || 5000,
+            details: { current: sem.currentCount, max: sem.max, retrySec },
+          }
+        );
+      }
+      semToken = sem.token;
     }
 
     // ========== 扣次数 ==========
-    // 扣费失败，直接释放上游席位给别人使用
     const deductResult = await deductCredits(
       userId,
       cost,
@@ -128,9 +134,9 @@ export async function onRequestPost(context) {
       env.SUPABASE_SERVICE_ROLE_KEY
     );
     if (!deductResult.success) {
-      try {
-        await releaseUpstreamSeat('video', sem.token, env);
-      } catch (_) {}
+      if (useRealAgnes && semToken) {
+        try { await releaseUpstreamSeat('video', semToken, env); } catch (_) {}
+      }
       return errorResponseEx(deductResult.error || '余额不足，请充值后再生成', {
         status: 400,
         error_code: deductResult.error_code || ERROR_CODES.BALANCE_INSUFFICIENT,
@@ -160,12 +166,10 @@ export async function onRequestPost(context) {
         env
       );
     } catch (taskError: any) {
-      // Agnes 调用失败，释放席位并退还次数
+      // Agnes 调用失败：退还次数（席位释放由下面统一的 finally 做）
       try {
-        await releaseUpstreamSeat('video', sem.token, env);
-      } catch (_) {}
-      try {
-        await rollbackDeducted(userId, cost, deductResult.used_daily, env);
+        await refundCredits(userId, cost, !!deductResult.used_daily,
+          env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
       } catch (rbErr) {
         console.error('退还次数失败:', rbErr);
       }
@@ -185,16 +189,19 @@ export async function onRequestPost(context) {
       }
       return errorResponse(taskError?.message || '视频生成失败，请稍后重试', 502);
     } finally {
-      // Agnes 异步任务创建成功后，席位就不再占用（模型内部自己排队），立刻释放给下一个请求
-      try {
-        await releaseUpstreamSeat('video', sem.token, env);
-      } catch (_) {}
+      // 无论成功/失败：如果有席位，统一在这里释放，避免漏/重释放
+      if (useRealAgnes && semToken) {
+        try {
+          await releaseUpstreamSeat('video', semToken, env);
+        } catch (_) {}
+      }
     }
 
     // Agnes 降级到模拟模式（免费），也退回次数 —— 避免用户以为用了但实际没生成
     if (taskResult.mode && taskResult.mode.startsWith('simulation')) {
       try {
-        await rollbackDeducted(userId, cost, deductResult.used_daily, env);
+        await refundCredits(userId, cost, !!deductResult.used_daily,
+          env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
       } catch (_) {}
       if (taskResult.mode === 'simulation-fallback') {
         console.warn('Agnes API 调用失败，已降级模拟并退还次数:', taskResult.error);
@@ -248,73 +255,6 @@ export async function onRequestPost(context) {
   } catch (error: any) {
     console.error('生成视频失败:', error);
     return errorResponse('生成失败，请稍后重试', 500);
-  }
-}
-
-// 回滚扣除的次数（API 失败时使用）
-async function rollbackDeducted(userId: any, cost: number, usedDaily: boolean | undefined, env: any) {
-  const supabaseUrl = env.SUPABASE_URL;
-  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (usedDaily) {
-    // 扣的是每日次数：回退 daily_credits_used（不用条件，直接减就行，最多减成 0）
-    await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation',
-      },
-      body: JSON.stringify({
-        daily_credits_used: Math.max(
-          0,
-          `(daily_credits_used - ${cost})` as any
-        ),
-      }),
-    }).catch(() => {});
-    // 上面的表达式在 PostgREST 里不能直接用字符串当数字计算，改用查询后再更新
-    try {
-      const u = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=daily_credits_used`, {
-        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-      });
-      if (u.ok) {
-        const arr = await u.json();
-        if (arr?.[0]) {
-          const cur = arr[0].daily_credits_used || 0;
-          await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-            method: 'PATCH',
-            headers: {
-              apikey: serviceKey,
-              Authorization: `Bearer ${serviceKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ daily_credits_used: Math.max(0, cur - cost) }),
-          });
-        }
-      }
-    } catch (_) {}
-  } else {
-    // 扣的是余额：加回去
-    try {
-      const u = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}&select=balance`, {
-        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-      });
-      if (u.ok) {
-        const arr = await u.json();
-        if (arr?.[0]) {
-          const cur = arr[0].balance || 0;
-          await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${userId}`, {
-            method: 'PATCH',
-            headers: {
-              apikey: serviceKey,
-              Authorization: `Bearer ${serviceKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ balance: cur + cost }),
-          });
-        }
-      }
-    } catch (_) {}
   }
 }
 
