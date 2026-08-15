@@ -41,20 +41,20 @@ function sleep(ms) {
 }
 
 // 计算 num_frames 和 frame_rate
-// 3/5/10秒：24fps 官方推荐；18秒：18fps 避开1080p帧数限制
+// 严格按官方文档推荐值（https://wiki.agnes-ai.com/en/docs/agnes-video-v20#common-duration-settings）
+// 所有档位都用 24fps，num_frames 遵循 8n+1 规则且 ≤ 441
 function calculateFrames(duration) {
-  let frameRate = 24;
+  const frameRate = 24;
   let numFrames;
 
   if (duration <= 3) {
-    numFrames = 81;    // 约 3 秒 @24fps
+    numFrames = 81;    // 官方推荐：约 3 秒 @24fps
   } else if (duration <= 5) {
-    numFrames = 121;   // 约 5 秒 @24fps
+    numFrames = 121;   // 官方推荐：约 5 秒 @24fps
   } else if (duration <= 10) {
-    numFrames = 241;   // 约 10 秒 @24fps
+    numFrames = 241;   // 官方推荐：约 10 秒 @24fps
   } else {
-    frameRate = 20;
-    numFrames = 361;   // 约 18 秒 @20fps（8n+1 格式，避开 1080p 帧数限制）
+    numFrames = 441;   // 官方推荐：约 18 秒 @24fps（441 是 num_frames 上限）
   }
 
   return { num_frames: numFrames, frame_rate: frameRate };
@@ -136,6 +136,9 @@ export async function createVideoTask(params, env) {
   const fullNegativePrompt = styleNegativePrefix + (negative_prompt || '');
 
   // 构建请求体
+  // 注意：只传官方文档明确支持的参数（https://wiki.agnes-ai.com/en/docs/agnes-video-v20）
+  // - num_inference_steps：官方支持，30 步是 quality/speed 平衡点
+  // - guidance_scale：官方参数列表里没有，不能传，否则可能 400
   const requestBody = {
     model: 'agnes-video-v2.0',
     prompt: fullPrompt,
@@ -144,11 +147,8 @@ export async function createVideoTask(params, env) {
     width,
     num_frames,
     frame_rate,
-    // 默认推到 1080p 后，必须给一个合理的步数和引导系数，否则细节会糊
-    // 30 步是 Agnes Video v2.0 在 1080p 下的推荐值（官方 quality/speed 平衡点）
+    // 30 步是官方文档支持的参数，比默认值细节更扎实
     num_inference_steps: num_inference_steps != null ? num_inference_steps : 30,
-    // guidance_scale 7.5 是 diffusion 模型的工业标准值，太低会偏离 prompt，太高会过度饱和畸变
-    guidance_scale: 7.5,
   };
 
   // 根据模式设置不同参数（严格按官方文档）

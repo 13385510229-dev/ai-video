@@ -109,16 +109,16 @@ export async function generateImage({
   // 转换尺寸格式：旧格式 → 新格式（size 档位 + ratio 宽高比）
   const sizeConfig = SIZE_MAPPING[size] || { size: '1K', ratio: '1:1' };
 
-  // 构建请求体（使用官方推荐的新参数格式）
+  // 构建请求体（严格按官方文档参数：https://wiki.agnes-ai.com/en/docs/agnes-image-21-flash）
+  // 注意：图片 API 官方参数只有 model/prompt/size/ratio/image/return_base64/extra_body
+  // - num_inference_steps：图片 API 不支持，不能传
+  // - guidance_scale：图片 API 不支持，不能传
+  // 清晰度通过 size 档位（2K）+ ratio 控制，不要传额外参数
   const requestBody = {
     model: MODEL_NAME,
     prompt: fullPrompt,
-    size: sizeConfig.size, // 使用档位值：1K、2K、3K、4K
-    ratio: sizeConfig.ratio, // 使用宽高比
-    // 2K 档位下默认 30 步：细节扎实，避免糊感
-    num_inference_steps: 30,
-    // guidance_scale 7.5 是 diffusion 工业标准值，太低会偏离 prompt，太高会过度饱和畸变
-    guidance_scale: 7.5,
+    size: sizeConfig.size, // 使用档位值：1K、2K、3K、4K（官方推荐）
+    ratio: sizeConfig.ratio, // 使用宽高比（官方推荐）
     extra_body: {
       response_format: 'url', // 官方要求：URL 输出放在 extra_body 里
     },
