@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import WaveBackground from '../components/WaveBackground';
+import SliderCaptcha from '../components/SliderCaptcha';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
 
   const navigate = useNavigate();
   const { setToken, setUser, isLoggedIn } = useAuthStore();
@@ -36,6 +38,11 @@ const Login = () => {
       return;
     }
 
+    if (!captchaVerified) {
+      setError('请先完成滑块验证');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch('/api/auth/login', {
@@ -50,9 +57,12 @@ const Login = () => {
         setCountdown(60);
       } else {
         setError(data.error || '发送失败，请重试');
+        // 发送失败后重置滑块验证
+        setCaptchaVerified(false);
       }
     } catch (err) {
       setError('网络错误，请稍后重试');
+      setCaptchaVerified(false);
     } finally {
       setLoading(false);
     }
@@ -134,6 +144,23 @@ const Login = () => {
                     placeholder="请输入你的邮箱"
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-300 focus:bg-white transition-all"
                   />
+                </div>
+
+                {/* 滑块验证 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    安全验证
+                  </label>
+                  {captchaVerified ? (
+                    <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      验证通过
+                    </div>
+                  ) : (
+                    <SliderCaptcha onVerify={(verified) => setCaptchaVerified(verified)} />
+                  )}
                 </div>
 
                 {error && (

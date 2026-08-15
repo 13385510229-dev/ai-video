@@ -26,7 +26,7 @@ export async function sendVerificationCode(email, env) {
 
   const resendApiKey = env.RESEND_API_KEY;
   const fromEmail = env.SMTP_FROM_EMAIL || 'noreply@example.com';
-  const fromName = env.SMTP_FROM_NAME || 'AI视频生成平台';
+  const fromName = env.SMTP_FROM_NAME || 'Htyorin AI 宏图灵境';
 
   if (!resendApiKey) {
     console.log(`[模拟邮件] 验证码: ${code} (发送给: ${email})`);

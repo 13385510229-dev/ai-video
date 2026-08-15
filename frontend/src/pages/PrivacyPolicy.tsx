@@ -74,7 +74,7 @@ const PrivacyPolicy = () => {
         <section>
           <h2 className="text-xl font-semibold mb-4 text-white">8. 联系方式</h2>
           <p>如有任何隐私相关问题，请通过以下方式联系我们：</p>
-          <p className="text-gray-400 mt-2">邮箱：privacy@aivideo.example.com</p>
+          <p className="text-gray-400 mt-2">邮箱：privacy@htyorin.ai</p>
         </section>
       </div>
     </div>

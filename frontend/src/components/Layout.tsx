@@ -50,7 +50,7 @@ const Layout = () => {
       }`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between transition-all duration-300">
           <Link to="/" className="text-2xl font-bold tracking-tight text-gray-900">
-            AI<span className="text-gray-400">-HTY</span>
+            Htyorin<span className="text-gray-400"> AI</span>
           </Link>
 
           {isLoggedIn && (
@@ -107,7 +107,7 @@ const Layout = () => {
       {/* 页脚 */}
       <footer className="border-t border-gray-200 py-8">
         <div className="max-w-7xl mx-auto px-6 text-center text-gray-400 text-sm">
-          © 2026 AI-HTY. All rights reserved.
+          © 2026 Htyorin AI. All rights reserved.
           <div className="mt-2 space-x-6">
             <a href="/terms" className="hover:text-gray-300 transition-colors">服务条款</a>
             <a href="/privacy" className="hover:text-gray-300 transition-colors">隐私政策</a>

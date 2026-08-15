@@ -10,7 +10,7 @@ const TermsOfService = () => {
         <section>
           <h2 className="text-xl font-semibold mb-4 text-white">1. 服务概述</h2>
           <p className="mb-4">
-            AI Video Generator（以下简称"本服务"）是一个基于人工智能技术的视频和图片生成平台。用户可以通过输入文字描述，生成相应的视频或图片内容。
+            Htyorin AI 宏图灵境（以下简称"本服务"）是一个基于人工智能技术的视频和图片生成平台。用户可以通过输入文字描述，生成相应的视频或图片内容。
           </p>
         </section>
 
@@ -61,7 +61,7 @@ const TermsOfService = () => {
         <section>
           <h2 className="text-xl font-semibold mb-4 text-white">7. 联系方式</h2>
           <p>如有任何问题或建议，请通过以下方式联系我们：</p>
-          <p className="text-gray-400 mt-2">邮箱：support@aivideo.example.com</p>
+          <p className="text-gray-400 mt-2">邮箱：support@htyorin.ai</p>
         </section>
       </div>
     </div>

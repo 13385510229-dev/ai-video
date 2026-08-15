@@ -25,7 +25,7 @@ const Home = () => {
           {/* 顶部小字标签 */}
           <div className="inline-flex items-center gap-2 mb-8 text-gray-500 text-sm font-medium tracking-widest uppercase">
             <span className="w-8 h-px bg-gray-300"></span>
-            AI 创意生成平台
+            Htyorin AI 创意生成平台
             <span className="w-8 h-px bg-gray-300"></span>
           </div>
 
