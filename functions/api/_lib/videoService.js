@@ -70,7 +70,7 @@ export async function createVideoTask(params, env) {
   } = params;
 
   const apiKey = env.AGNES_API_KEY;
-  const apiBase = env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
+  const apiBase = env.AGNES_API_URL || env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
 
   // 如果没有配置 API Key，使用模拟模式
   if (!apiKey) {
@@ -222,7 +222,7 @@ export async function getVideoTaskStatus(taskId, env, videoId = null) {
       });
     } else {
       // 兼容旧版：用 task_id 查询
-      const apiBase = env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
+      const apiBase = env.AGNES_API_URL || env.AGNES_API_BASE || 'https://apihub.agnes-ai.com/v1';
       console.log('使用 task_id 查询（兼容旧版）:', taskId);
       res = await fetch(`${apiBase}/videos/${taskId}`, {
         headers: {
