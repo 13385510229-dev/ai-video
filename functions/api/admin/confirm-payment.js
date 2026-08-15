@@ -1,5 +1,6 @@
 import { jsonResponse, errorResponse, handleOptions, requireAdmin } from '../_lib/auth.js';
 import { activateMembership, MEMBERSHIP_PLANS } from '../_lib/membership.js';
+import { writeAdminLog } from '../_lib/adminLog.js';
 
 export async function onRequestPost(context) {
   try {
@@ -121,6 +122,20 @@ export async function onRequestPost(context) {
         return errorResponse('余额更新失败，请手动处理', 500);
       }
 
+      // 审计日志：次卡充值
+      await writeAdminLog(env, {
+        action: 'confirm_payment',
+        targetUserId: order.user_id,
+        targetOrderId: orderId,
+        amount: credits,
+        detail: {
+          type: 'credits',
+          order_no: order.order_no,
+          order_amount: order.amount,
+        },
+        request,
+      });
+
       return jsonResponse({
         success: true,
         message: '支付确认成功',
@@ -147,6 +162,23 @@ export async function onRequestPost(context) {
       if (!result.success) {
         return errorResponse('开通会员失败，请手动处理', 500);
       }
+
+      // 审计日志：开通会员
+      await writeAdminLog(env, {
+        action: 'confirm_payment',
+        targetUserId: order.user_id,
+        targetOrderId: orderId,
+        amount: null,
+        detail: {
+          type: 'membership',
+          plan: planType,
+          order_no: order.order_no,
+          order_amount: order.amount,
+          is_renewal: !!result.is_renewal,
+          expire_at: result.expire_at,
+        },
+        request,
+      });
 
       return jsonResponse({
         success: true,

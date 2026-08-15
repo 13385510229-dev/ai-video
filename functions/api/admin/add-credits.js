@@ -1,5 +1,6 @@
 import { jsonResponse, errorResponse, handleOptions, requireAdmin } from '../_lib/auth.js';
 import { createSupabaseClient } from '../_lib/supabase.js';
+import { writeAdminLog } from '../_lib/adminLog.js';
 
 export async function onRequestPost(context) {
   try {
@@ -80,6 +81,18 @@ export async function onRequestPost(context) {
     if (finalBalance === null) {
       return errorResponse('操作过于频繁，请稍后重试', 409);
     }
+
+    // 审计日志（容错，失败不影响主流程）
+    await writeAdminLog(env, {
+      action: 'add_credits',
+      targetUserId: userId,
+      amount: creditsNum,
+      detail: {
+        before_balance: null, // 不再暴露原值，避免日志泄露
+        after_balance: finalBalance,
+      },
+      request,
+    });
 
     return jsonResponse({
       success: true,

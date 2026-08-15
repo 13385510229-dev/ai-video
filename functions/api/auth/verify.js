@@ -67,6 +67,11 @@ export async function onRequestPost(context) {
       user = newUser;
     }
 
+    // 检查用户是否被禁用（status 字段可能不存在，兼容旧 schema）
+    if (user.status && String(user.status).toLowerCase() === 'disabled') {
+      return errorResponse('您的账号已被禁用，如有疑问请联系管理员', 403);
+    }
+
     // 生成 JWT token（禁止使用默认弱密钥）
     const jwtSecret = env.JWT_SECRET;
     if (!jwtSecret || jwtSecret === 'default-secret-change-me') {

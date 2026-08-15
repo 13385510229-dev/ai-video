@@ -1,5 +1,6 @@
 import { errorResponse, handleOptions, requireAuth, rateLimit, jsonResponse } from '../_lib/auth.js';
 import { checkAndResetDailyCredits, MEMBERSHIP_PLANS } from '../_lib/membership.js';
+import { acquireUpstreamSeat, releaseUpstreamSeat } from '../_lib/upstreamSemaphore.js';
 
 // 聊天模型列表（按优先级排列）
 const CHAT_MODELS = [
@@ -164,9 +165,29 @@ export async function onRequestPost(context) {
       return errorResponse('系统服务未配置');
     }
 
-    // 先扣费（非会员），失败直接返回
-    const charge = await chargeChat(userId, env);
-    if (!charge.ok) return errorResponse(charge.msg || '无法继续聊天');
+    // === 上游并发信号量：先申请席位，失败直接 429（不扣费）===
+    // 多人同时聊天时，Agnes 聊天 API 会 429，这里加全局并发上限保护
+    const seat = await acquireUpstreamSeat('chat', env);
+    if (!seat.acquired) {
+      return errorResponse(
+        `当前使用人数较多（${seat.currentCount ?? '?'}/${seat.max ?? '?'}），请稍后重试`,
+        429
+      );
+    }
+    const seatToken = seat.token;
+
+    // 先扣费（非会员），失败释放席位并返回
+    let charge: { ok: boolean; msg?: string; used_daily?: boolean };
+    try {
+      charge = await chargeChat(userId, env);
+    } catch (e) {
+      try { await releaseUpstreamSeat('chat', seatToken, env); } catch (_) {}
+      throw e;
+    }
+    if (!charge.ok) {
+      try { await releaseUpstreamSeat('chat', seatToken, env); } catch (_) {}
+      return errorResponse(charge.msg || '无法继续聊天');
+    }
 
     // 尝试调用模型，失败则回退
     let apiRes: Response | null = null;
@@ -198,19 +219,17 @@ export async function onRequestPost(context) {
 
     if (!apiRes || !apiRes.ok) {
       console.error('聊天所有模型调用失败:', lastError);
-      // 失败退还次数
-      try {
-        await refundChat(userId, charge.used_daily, env);
-      } catch (_) {}
+      // 失败退还次数 + 释放席位
+      try { await refundChat(userId, charge.used_daily, env); } catch (_) {}
+      try { await releaseUpstreamSeat('chat', seatToken, env); } catch (_) {}
       return errorResponse('AI 响应失败，请稍后重试');
     }
 
     // 流式转发
     const bodyIn = apiRes.body;
     if (!bodyIn) {
-      try {
-        await refundChat(userId, charge.used_daily, env);
-      } catch (_) {}
+      try { await refundChat(userId, charge.used_daily, env); } catch (_) {}
+      try { await releaseUpstreamSeat('chat', seatToken, env); } catch (_) {}
       return errorResponse('AI 响应为空');
     }
 
@@ -218,6 +237,8 @@ export async function onRequestPost(context) {
     const reader = bodyIn.getReader();
     const writer = writable.getWriter();
 
+    // 流式传输在后台异步执行，信号量在流真正结束（done 或 error）后才释放
+    // 这是关键：流式响应期间一直占用席位，避免流未结束就放新请求进来导致上游 429
     (async () => {
       try {
         while (true) {
@@ -228,9 +249,9 @@ export async function onRequestPost(context) {
       } catch (e) {
         console.error('流式传输错误:', e);
       } finally {
-        try {
-          writer.close();
-        } catch (_) {}
+        try { writer.close(); } catch (_) {}
+        // 流式结束才释放信号量席位
+        try { await releaseUpstreamSeat('chat', seatToken, env); } catch (_) {}
       }
     })();
 

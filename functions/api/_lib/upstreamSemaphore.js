@@ -16,17 +16,19 @@
 
 // 默认上限（尽量放开到主流 Agnes 入门/付费档的"最大安全值"）
 // 调用方可以在 Workers 环境变量里再改大/改小：
-//   MAX_CONCURRENT_VIDEO / MAX_CONCURRENT_IMAGE   并发数量
-//   UPSTREAM_VIDEO_LEASE_TTL_SEC / UPSTREAM_IMAGE_LEASE_TTL_SEC  席位 TTL
+//   MAX_CONCURRENT_VIDEO / MAX_CONCURRENT_IMAGE / MAX_CONCURRENT_CHAT  并发数量
+//   UPSTREAM_VIDEO_LEASE_TTL_SEC / UPSTREAM_IMAGE_LEASE_TTL_SEC / UPSTREAM_CHAT_LEASE_TTL_SEC  席位 TTL
 const DEFAULT_CONCURRENCY = {
   video: 30,  // 视频是异步创建 task，只占用"创建接口"那一下，并发可以给很高
   image: 15,  // 图片是同步接口（最多 120s），每个都占一个上游连接
+  chat: 20,   // 聊天是流式接口（最多 60s），Agnes 聊天 API 通常并发上限 20-30
 };
 
 // 每个席位的 TTL（最长保护时间），对应 Agnes 接口超时
 const DEFAULT_LEASE_TTL_SEC = {
   video: 500,   // 视频 API 超时 480s，略长 20s 做保护
   image: 130,   // 图片 API 超时 120s，略长 10s 做保护
+  chat: 70,     // 聊天 API 超时 60s，略长 10s 做保护
 };
 
 // counter key 自身的 TTL 兜底：即使所有席位 TTL 都过期、且没人触发 clean，
@@ -35,6 +37,7 @@ const DEFAULT_LEASE_TTL_SEC = {
 const COUNTER_TTL_SEC = {
   video: 1000,
   image: 260,
+  chat: 140,
 };
 
 const PREFIX = 'upstreamsem';
@@ -59,6 +62,11 @@ function getConfig(env, name) {
     const envMax = safeParseInt(env?.MAX_CONCURRENT_IMAGE, 0);
     if (envMax > 0) max = envMax;
     const envTtl = safeParseInt(env?.UPSTREAM_IMAGE_LEASE_TTL_SEC, 0);
+    if (envTtl > 0) leaseTtl = envTtl;
+  } else if (name === 'chat') {
+    const envMax = safeParseInt(env?.MAX_CONCURRENT_CHAT, 0);
+    if (envMax > 0) max = envMax;
+    const envTtl = safeParseInt(env?.UPSTREAM_CHAT_LEASE_TTL_SEC, 0);
     if (envTtl > 0) leaseTtl = envTtl;
   }
 
@@ -96,7 +104,7 @@ function genToken() {
  * @returns {Promise<{ acquired: boolean, token?: string, currentCount?: number, max?: number, retryAfterMs?: number }>}
  */
 export async function acquireUpstreamSeat(
-  name: 'video' | 'image',
+  name: 'video' | 'image' | 'chat',
   env: Record<string, any>,
   opts?: { maxOverride?: number }
 ) {
@@ -212,7 +220,7 @@ export async function acquireUpstreamSeat(
  * 释放一个上游并发席位。调用方要确保每个 acquire 成功后在 finally 里 release。
  */
 export async function releaseUpstreamSeat(
-  name: 'video' | 'image',
+  name: 'video' | 'image' | 'chat',
   token: string | undefined,
   env: Record<string, any>
 ) {
@@ -255,7 +263,7 @@ export async function releaseUpstreamSeat(
 /**
  * 供调试用：读取当前计数
  */
-export async function inspectUpstreamSeats(name: 'video' | 'image', env: Record<string, any>) {
+export async function inspectUpstreamSeats(name: 'video' | 'image' | 'chat', env: Record<string, any>) {
   const { max } = getConfig(env, name);
   const counterKey = `${PREFIX}:${name}:counter`;
   let kvCount: number | null = null;
