@@ -285,7 +285,7 @@ export default function ImageGenerate() {
         )}
 
         {/* 提示词输入 */}
-        <div className="mb-6">
+        <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             图片描述 <span className="text-red-500">*</span>
           </label>
@@ -293,11 +293,35 @@ export default function ImageGenerate() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={mode === 'text2image' 
-              ? '描述你想要生成的图片，例如：一只在海边散步的橘猫，夕阳下的剪影...'
-              : '描述想要如何修改图片，例如：把背景改成夜晚，增加星空效果...'
+              ? '推荐格式：[主体] + [场景/环境] + [风格] + [光照] + [构图] + [质量要求]\n例如：A glowing floating city above a canyon at sunrise, cinematic realistic style, wide-angle composition, soft golden lighting, high visual density'
+              : '推荐格式：[改变要求] + [新风格/场景] + [添加或移除的元素] + [保留的元素]\n例如：Transform the daytime street scene into a cyberpunk night scene, add neon signs and wet pavement reflections, while keeping the original street layout and camera angle'
             }
             className="w-full h-32 px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition-all resize-none"
           />
+        </div>
+
+        {/* Agnes 图片提示词最佳实践引导 */}
+        <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">💡</span>
+            <span className="text-sm font-medium text-green-900">Agnes 图片提示词最佳实践</span>
+          </div>
+          <div className="text-xs text-green-800 space-y-2">
+            {mode === 'text2image' && (
+              <>
+                <p className="font-medium">文生图推荐结构：</p>
+                <code className="block bg-white px-2 py-1 rounded text-green-900 text-[11px] break-all">[主体] + [场景/环境] + [风格] + [光照] + [构图] + [质量要求]</code>
+                <p className="text-green-700">示例：日出时分薄雾峡谷上方的发光浮空城市，电影级写实风格，广角构图，丰富的建筑细节，柔和的金色光线，高视觉密度</p>
+              </>
+            )}
+            {mode === 'image2image' && (
+              <>
+                <p className="font-medium">图生图推荐结构：</p>
+                <code className="block bg-white px-2 py-1 rounded text-green-900 text-[11px] break-all">[改变要求] + [新风格/场景] + [添加/移除的元素] + [保留的元素]</code>
+                <p className="text-green-700">示例：将白天街道场景改为电影级赛博朋克夜景，添加霓虹招牌和湿滑路面倒影，同时保留原始街道布局、相机角度和主要建筑形状。</p>
+              </>
+            )}
+          </div>
         </div>
 
         {/* 负面提示词 */}

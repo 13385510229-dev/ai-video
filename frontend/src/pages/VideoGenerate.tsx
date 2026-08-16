@@ -457,7 +457,7 @@ const VideoGenerate = () => {
         )}
 
         {/* 视频描述 */}
-        <div className="mb-6">
+        <div className="mb-4">
           <label className="block text-sm font-medium mb-2 text-gray-700">
             视频描述 <span className="text-red-500">*</span>
           </label>
@@ -465,12 +465,50 @@ const VideoGenerate = () => {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={mode === 'ti2vid' 
-              ? '描述你想要生成的视频内容，越详细效果越好...'
+              ? '推荐格式：[主体] + [动作] + [场景] + [镜头运动] + [光线] + [风格]\n例如：A cat walking on the beach at sunset, soft ocean waves, slow tracking shot, golden lighting, realistic style'
               : '描述画面的运动和变化，保持主体稳定...'
             }
             rows={4}
             className="w-full resize-none bg-white border border-gray-200 text-gray-900 rounded-xl p-4 focus:border-gray-400 focus:ring-2 focus:ring-gray-100 outline-none transition-all"
           />
+        </div>
+
+        {/* Agnes 提示词最佳实践引导 */}
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">💡</span>
+            <span className="text-sm font-medium text-blue-900">Agnes 提示词最佳实践</span>
+          </div>
+          <div className="text-xs text-blue-800 space-y-2">
+            {mode === 'ti2vid' && (
+              <>
+                <p className="font-medium">文生视频推荐结构：</p>
+                <code className="block bg-white px-2 py-1 rounded text-blue-900 text-[11px] break-all">[主体] + [动作] + [场景] + [镜头运动] + [光线] + [风格]</code>
+                <p className="text-blue-700">示例：A young astronaut walking across a red desert planet, dust blowing in the wind, slow cinematic tracking shot, dramatic sunset lighting, realistic sci-fi style</p>
+              </>
+            )}
+            {mode === 'i2v' && (
+              <>
+                <p className="font-medium">图生视频提示词：</p>
+                <p>描述哪些内容应该运动，以及哪些关键主体元素应该保持稳定。</p>
+                <p className="text-blue-700">示例：Animate the character with subtle breathing motion, hair moving gently in the wind, background lights flickering softly, while keeping the face and outfit consistent</p>
+              </>
+            )}
+            {mode === 'keyframes' && (
+              <>
+                <p className="font-medium">关键帧动画提示词：</p>
+                <p>清晰描述关键帧之间的过渡关系。</p>
+                <p className="text-blue-700">示例：Create a smooth transition from the first keyframe to the second keyframe, maintaining character identity, consistent camera angle, and natural motion between scenes</p>
+              </>
+            )}
+            {mode === 'multi-image' && (
+              <>
+                <p className="font-medium">多图合成提示词：</p>
+                <p>描述运动内容，保持关键主体稳定。</p>
+                <p className="text-blue-700">示例：Animate the scene with gentle camera movement, subtle character breathing, and environmental lighting changes, while keeping all key subjects consistent</p>
+              </>
+            )}
+          </div>
         </div>
 
         {/* 负面提示词 */}
