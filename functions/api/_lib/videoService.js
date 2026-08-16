@@ -198,20 +198,6 @@ export async function createVideoTask(params, env) {
   }
   // num_inference_steps 已经在 requestBody 默认值里处理过（30 或用户传入值）
 
-  console.log('Agnes AI 参数:', {
-    model: 'agnes-video-v2.0',
-    mode,
-    prompt: fullPrompt,
-    negative_prompt,
-    num_frames,
-    frame_rate,
-    width,
-    height,
-    style,
-    hasImage: !!image,
-    imageCount: images?.length || 0,
-  });
-
   // 可重试的上游类型：429 限流、502/503/504 过载、网络抖动、超时（偶尔）
   const RETRYABLE = new Set([
     UPSTREAM_ERROR_TYPES.RATE_LIMIT,
