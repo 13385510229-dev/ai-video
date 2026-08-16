@@ -60,9 +60,31 @@ function calculateFrames(duration) {
   return { num_frames: numFrames, frame_rate: frameRate };
 }
 
-// 计算分辨率（1080p 级别，比原 768p 清晰度翻倍）
-// 注意：宽高必须符合 Agnes 官方约束（8 的倍数），否则会被服务端拒绝
-function calculateResolution(aspectRatio) {
+// 计算分辨率
+// 3/5/10 秒：1080p（max_num_frames=241，10秒@24fps=241帧刚好不超限）
+// 18 秒：降级到 720p（1080p 下 max_num_frames=241，441帧会超限；720p 支持 441 帧）
+// 官方文档：https://wiki.agnes-ai.com/en/docs/agnes-video-v20#resolution-tier-limits
+function calculateResolution(aspectRatio, duration) {
+  // 18 秒视频需要 441 帧，1080p 下 max_num_frames=241 会超限，必须降级到 720p
+  const use720p = duration > 10;
+
+  if (use720p) {
+    switch (aspectRatio) {
+      case '9:16':
+        return { width: 720, height: 1280 };
+      case '1:1':
+        return { width: 720, height: 720 };
+      case '4:3':
+        return { width: 960, height: 720 };
+      case '3:4':
+        return { width: 540, height: 720 };
+      case '16:9':
+      default:
+        return { width: 1280, height: 720 };
+    }
+  }
+
+  // 3/5/10 秒：1080p
   switch (aspectRatio) {
     case '9:16':
       return { width: 1080, height: 1920 };
@@ -74,7 +96,7 @@ function calculateResolution(aspectRatio) {
       return { width: 810, height: 1080 };
     case '16:9':
     default:
-      return { width: 1920, height: 1080 }; // 官方标准 16:9 1080p
+      return { width: 1920, height: 1080 };
   }
 }
 
@@ -125,7 +147,7 @@ export async function createVideoTask(params, env) {
 
   // 计算参数
   const { num_frames, frame_rate } = calculateFrames(duration);
-  const { width, height } = calculateResolution(aspect_ratio);
+  const { width, height } = calculateResolution(aspect_ratio, duration);
 
   // 风格关键词加到 prompt 前面
   const stylePrefix = styleKeywords[style] || '';
