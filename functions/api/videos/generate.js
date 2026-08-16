@@ -76,6 +76,8 @@ export async function onRequestPost(context) {
     if (!cleanPrompt) {
       return errorResponse('视频描述不能为空');
     }
+    // 负面提示词长度限制（最多 1000 字符，防止超长内容导致 Agnes API 截断或报错）
+    const cleanNegativePrompt = sanitizeString(negativePrompt, 1000);
 
     // 枚举值校验
     if (!ALLOWED_STYLES.includes(String(style))) return errorResponse('风格参数非法');
@@ -153,7 +155,7 @@ export async function onRequestPost(context) {
       taskResult = await createVideoTask(
         {
           prompt: cleanPrompt,
-          negative_prompt: sanitizeString(negativePrompt, 1000),
+          negative_prompt: cleanNegativePrompt,
           style: String(style),
           duration: cleanDuration,
           aspect_ratio: String(aspectRatio),
@@ -220,7 +222,7 @@ export async function onRequestPost(context) {
       body: JSON.stringify({
         user_id: userId,
         prompt: cleanPrompt,
-        negative_prompt: sanitizeString(negativePrompt, 1000) || null,
+        negative_prompt: cleanNegativePrompt || null,
         style: String(style) || null,
         duration: cleanDuration,
         aspect_ratio: String(aspectRatio),

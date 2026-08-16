@@ -100,6 +100,21 @@ function calculateResolution(aspectRatio, duration) {
   }
 }
 
+// 负面提示词去重：用户输入的负面词如果和系统预设重复，去掉重复项避免浪费 token
+// diffusion 模型对重复的负面词不会报错，但太长会被 Agnes API 截断
+function mergeNegativePrompt(systemNeg, userNeg) {
+  if (!userNeg || !userNeg.trim()) return systemNeg;
+  // 把系统预设的负面词按逗号分割成小写集合
+  const systemSet = new Set(
+    systemNeg.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  );
+  // 过滤掉用户输入中重复的词（大小写不敏感）
+  const userParts = userNeg.split(',').map(s => s.trim()).filter(Boolean);
+  const deduped = userParts.filter(p => !systemSet.has(p.toLowerCase()));
+  if (deduped.length === 0) return systemNeg;
+  return systemNeg + deduped.join(', ');
+}
+
 // 风格关键词映射（精简版，避免提示词过长）
 // 全部追加 sharp focus / ultra detailed / highly detailed 以压制模糊感
 const styleKeywords = {
@@ -153,9 +168,9 @@ export async function createVideoTask(params, env) {
   const stylePrefix = styleKeywords[style] || '';
   const fullPrompt = stylePrefix + prompt;
 
-  // 风格对应的负面提示词
+  // 风格对应的负面提示词（去重：用户输入的词如果和系统预设重复，自动去掉）
   const styleNegativePrefix = styleNegativeKeywords[style] || '';
-  const fullNegativePrompt = styleNegativePrefix + (negative_prompt || '');
+  const fullNegativePrompt = mergeNegativePrompt(styleNegativePrefix, negative_prompt);
 
   // 构建请求体
   // 注意：只传官方文档明确支持的参数（https://wiki.agnes-ai.com/en/docs/agnes-video-v20）

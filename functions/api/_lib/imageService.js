@@ -59,6 +59,18 @@ const SIZE_MAPPING = {
   '1440x2560': { size: '2K', ratio: '9:16' },
 };
 
+// 负面提示词去重：用户输入的负面词如果和系统预设重复，去掉重复项避免浪费 token
+function mergeNegativePrompt(systemNeg, userNeg) {
+  if (!userNeg || !userNeg.trim()) return systemNeg;
+  const systemSet = new Set(
+    systemNeg.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  );
+  const userParts = userNeg.split(',').map(s => s.trim()).filter(Boolean);
+  const deduped = userParts.filter(p => !systemSet.has(p.toLowerCase()));
+  if (deduped.length === 0) return systemNeg;
+  return systemNeg + deduped.join(', ');
+}
+
 // 生成图片
 export async function generateImage({
   prompt,
@@ -101,9 +113,9 @@ export async function generateImage({
     fullNegativePrompt = styleNegativeKeywords[style] || '';
   }
 
-  // 加上用户的负面提示词
+  // 加上用户的负面提示词（去重：和系统预设重复的词自动去掉）
   if (negativePrompt) {
-    fullNegativePrompt = fullNegativePrompt + negativePrompt;
+    fullNegativePrompt = mergeNegativePrompt(fullNegativePrompt, negativePrompt);
   }
 
   // 转换尺寸格式：旧格式 → 新格式（size 档位 + ratio 宽高比）
@@ -133,14 +145,6 @@ export async function generateImage({
   if (mode === 'image2image' && image) {
     requestBody.image = [image];
   }
-
-  console.log('Agnes Image API 请求参数:', {
-    model: MODEL_NAME,
-    size: sizeConfig.size,
-    ratio: sizeConfig.ratio,
-    mode,
-    hasImage: !!image,
-  });
 
   // 可重试的上游类型
   const RETRYABLE = new Set([

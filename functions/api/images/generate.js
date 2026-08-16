@@ -73,6 +73,8 @@ export async function onRequestPost(context) {
 
     const cleanPrompt = sanitizeString(prompt, 1500);
     if (!cleanPrompt) return errorResponse('图片描述不能为空');
+    // 负面提示词长度限制（最多 1000 字符，防止超长内容导致 Agnes API 截断或报错）
+    const cleanNegativePrompt = sanitizeString(negativePrompt, 1000);
     if (!ALLOWED_STYLES.includes(String(style))) return errorResponse('风格参数非法');
     if (!ALLOWED_MODES.includes(String(mode))) return errorResponse('生成模式参数非法');
     if (typeof size !== 'string' || size.length > 32) return errorResponse('尺寸参数非法');
@@ -134,7 +136,7 @@ export async function onRequestPost(context) {
     try {
       genResult = await generateImage({
         prompt: cleanPrompt,
-        negativePrompt: sanitizeString(negativePrompt, 1000),
+        negativePrompt: cleanNegativePrompt,
         size: cleanSize,
         style: String(style),
         apiKey: env.AGNES_API_KEY || '',
@@ -196,7 +198,7 @@ export async function onRequestPost(context) {
           id: imageId,
           user_id: userId,
           prompt: cleanPrompt,
-          negative_prompt: sanitizeString(negativePrompt, 1000) || null,
+          negative_prompt: cleanNegativePrompt || null,
           style: String(style) || null,
           size: cleanSize,
           status: 'succeeded',
